@@ -1,0 +1,8 @@
+[Activity]
+name = FileShare
+service_name = org.laptop.sugar.FileShareActivity
+activity_version = 1
+host_version = 1
+icon = activity-fileshare
+class = FileShareActivity.FileShareActivity
+show_launcher = yes
