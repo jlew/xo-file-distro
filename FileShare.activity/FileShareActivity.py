@@ -35,37 +35,29 @@ class FileShareActivity(activity.Activity):
         modle.append( None, [self.fileIndex,jObject.metadata['title'],jObject.metadata['activity_id']])
         self.fileIndex = self.fileIndex + 1
 
-    def __init__(self, handle):
-        activity.Activity.__init__(self, handle)
-
-        print "activity running"
-
-        self.sharedFiles = {}
-        self.fileIndex = 0
-
-        self.set_title('File Share')
-        
+    def _buildGui(self):
         # Create Toolbox
+        ################
         toolbox = activity.ActivityToolbox(self)
         self.set_toolbox(toolbox)
         toolbox.show()
 
-        # Add button to add file
-        self.addFileButton = gtk.Button("Add File")
-        self.addFileButton.connect("clicked", self.requestAddFile, None)
-
-        self.remFileButton = gtk.Button("Remove Selected File")
-        self.remFileButton.connect("clicked", self.requestRemFile, None)
-
-        # Button Container
+        # Create button bar
+        ###################
         hbbox = gtk.HButtonBox()
-        hbbox.add(self.addFileButton)
-        hbbox.add(self.remFileButton)
+        
+        addFileButton = gtk.Button("Add File")
+        addFileButton.connect("clicked", self.requestAddFile, None)
+        hbbox.add(addFileButton)
+        
+        remFileButton = gtk.Button("Remove Selected File")
+        remFileButton.connect("clicked", self.requestRemFile, None)
+        hbbox.add(remFileButton)
 
+        # Create File Tree
+        ##################
         table = gtk.Table(rows=10, columns=1, homogeneous=False)
-
-        self.treestore = gtk.TreeStore(int,str,str)
-        self.treeview = gtk.TreeView(self.treestore)
+        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str))
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn('File Name')
@@ -97,3 +89,15 @@ class FileShareActivity(activity.Activity):
 
         self.set_canvas(table)
         self.show_all()
+
+    def __init__(self, handle):
+        activity.Activity.__init__(self, handle)
+
+        print "activity running"
+
+        self.sharedFiles = {}
+        self.fileIndex = 0
+
+        self.set_title('File Share')
+        self._buildGui()
+
