@@ -25,10 +25,12 @@ class FileShareActivity(Activity):
             if chooser.run() == gtk.RESPONSE_ACCEPT:
                 jobject = chooser.get_selected_object()
                 self.fileIndex = self.fileIndex + 1
-                self.sharedFilesObjects[self.fileIndex] = jobject
-                self._addFileToUIList( [self.fileIndex,
-                                        str(jobject.metadata['title']),
-                                        str(jobject.metadata['activity_id'])] )
+                self.sharedFileObjects[self.fileIndex] = jobject
+
+                fileType = "File" if str(jobject.metadata['activity_id']) == "" else "Journal Activity Entry"
+                title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
+
+                self._addFileToUIList( [self.fileIndex, title, fileType] )
 
                 #TODO: IF SHARED, SEND NEW FILE LIST
         finally:
@@ -39,8 +41,9 @@ class FileShareActivity(Activity):
         self._logger.info('Requesting to delete file')
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
-            del self.sharedFiles[model.get_value(iter, 0)]
-            del self.sharedFileObjects[model.get_value(iter, 0)]
+            key = model.get_value(iter, 0)
+            del self.sharedFiles[key]
+            del self.sharedFileObjects[key]
             model.remove( iter )
 
     def requestDownloadFile(self, widget, data=None):
@@ -93,22 +96,22 @@ class FileShareActivity(Activity):
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn('File Name')
-        colHash = gtk.TreeViewColumn('File Hash')
+        colType = gtk.TreeViewColumn('Type')
 
         self.treeview.append_column(colName)
-        self.treeview.append_column(colHash)
+        self.treeview.append_column(colType)
 
         # create a CellRendererText to render the data
         self.cell = gtk.CellRendererText()
 
         # add the cell to the tvcolumn and allow it to expand
         colName.pack_start(self.cell, True)
-        colHash.pack_start(self.cell, True)
+        colType.pack_start(self.cell, True)
 
         # set the cell "text" attribute- retrieve text
         # from that column in treestore
         colName.add_attribute(self.cell, 'text', 1)
-        colHash.add_attribute(self.cell, 'text', 2)
+        colType.add_attribute(self.cell, 'text', 2)
 
         # make it searchable
         self.treeview.set_search_column(1)
@@ -129,7 +132,7 @@ class FileShareActivity(Activity):
         self._logger.info("activity running")
 
         self.sharedFiles = {}
-        self.sharedFilesObjects = {}
+        self.sharedFileObjects = {}
         self.fileIndex = 0
 
         self.set_title('File Share')
