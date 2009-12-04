@@ -1,6 +1,7 @@
 import logging
 import gtk
 import telepathy
+import pickle
 
 from sugar.activity.activity import Activity, ActivityToolbox
 from sugar.graphics.objectchooser import ObjectChooser
@@ -24,7 +25,11 @@ class FileShareActivity(Activity):
             if chooser.run() == gtk.RESPONSE_ACCEPT:
                 jobject = chooser.get_selected_object()
                 self.fileIndex = self.fileIndex + 1
-                self._addFileToList(self.fileIndex,jobject)
+                self.sharedFilesObjects[self.fileIndex] = jobject
+                self._addFileToUIList( [self.fileIndex,
+                                        str(jobject.metadata['title']),
+                                        str(jobject.metadata['activity_id'])] )
+
                 #TODO: IF SHARED, SEND NEW FILE LIST
         finally:
             chooser.destroy()
@@ -35,6 +40,7 @@ class FileShareActivity(Activity):
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
             del self.sharedFiles[model.get_value(iter, 0)]
+            del self.sharedFileObjects[model.get_value(iter, 0)]
             model.remove( iter )
 
     def requestDownloadFile(self, widget, data=None):
@@ -45,14 +51,15 @@ class FileShareActivity(Activity):
             if self.fcTube:
                 self.fcTube.RequestFile( model.get_value(iter, 0) )
 
-    def _addFileToList(self, id, jObject):
-        self.sharedFiles[id] = jObject
+
+    def _addFileToUIList(self, listDict):
+        self.sharedFiles[listDict[0]] = listDict
         modle = self.treeview.get_model()
 
-        modle.append( None, [id,jObject.metadata['title'],jObject.metadata['activity_id']])
+        modle.append( None, listDict )
 
     def getFileList(self):
-        return self.sharedFiles
+        return pickle.dumps(self.sharedFiles)
 
     def _buildGui(self):
         # Create Toolbox
@@ -117,11 +124,12 @@ class FileShareActivity(Activity):
 
     def __init__(self, handle):
         Activity.__init__(self, handle)
-        self._logger = logging.getLogger('FileShare-activity')
+        self._logger = logging.getLogger('fileshare-activity')
 
         self._logger.info("activity running")
 
         self.sharedFiles = {}
+        self.sharedFilesObjects = {}
         self.fileIndex = 0
 
         self.set_title('File Share')
@@ -142,7 +150,6 @@ class FileShareActivity(Activity):
 
     def _shared_cb(self, activity):
         self._logger.debug('Activity is now shared')
-        self._alert('Shared', 'The activity is shared')
         self.initiating = True
         self._sharing_setup()
 
@@ -155,7 +162,6 @@ class FileShareActivity(Activity):
             return
 
         self._logger.debug('Joined an existing shared activity')
-        self._alert('Joined', 'Joined a shared activity')
         self.initiating = False
         self._sharing_setup()
 
@@ -163,9 +169,6 @@ class FileShareActivity(Activity):
         self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].ListTubes(
             reply_handler=self._list_tubes_reply_cb,
             error_handler=self._list_tubes_error_cb)
-
-
-
 
     def _sharing_setup(self):
         if self._shared_activity is None:
@@ -182,15 +185,14 @@ class FileShareActivity(Activity):
             reply_handler=self._list_tubes_reply_cb,
             error_handler=self._list_tubes_error_cb)
 
-
     def _buddy_joined_cb (self, activity, buddy):
         """Called when a buddy joins the shared activity."""
-        self._logger.debug('Buddy %s joined', buddy.props.nick)
+        self._logger.debug('Buddy %s joined' % buddy.props.nick)
         self._alert('Buddy joined', '%s joined' % buddy.props.nick)
 
     def _buddy_left_cb (self, activity, buddy):
         """Called when a buddy leaves the shared activity."""
-        self._logger.debug('Buddy %s left', buddy.props.nick)
+        self._logger.debug('Buddy %s left' % buddy.props.nick)
         self._alert('Buddy left', '%s left' % buddy.props.nick)
 
     def _alert(self, title, text=None):
@@ -209,12 +211,12 @@ class FileShareActivity(Activity):
             self._new_tube_cb(*tube_info)
 
     def _list_tubes_error_cb(self, e):
-        self._logger.error('ListTubes() failed: %s', e)
+        self._logger.error('ListTubes() failed: %s' % e)
 
     def _new_tube_cb(self, id, initiator, type, service, params, state):
         self._logger.debug('New tube: ID=%d initator=%d type=%d service=%s '
-                     'params=%r state=%d', id, initiator, type, service,
-                     params, state)
+                     'params=%r state=%d' % (id, initiator, type, service,
+                     params, state))
         if (type == telepathy.TUBE_TYPE_DBUS and service == SERVICE):
             if state == telepathy.TUBE_STATE_LOCAL_PENDING:
                 self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].AcceptDBusTube(id)
@@ -228,24 +230,29 @@ class FileShareActivity(Activity):
                                       self.getFileList)
 
     def incomingRequest(self,action,request):
-        self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
-        pass
+        if action == "filelist":
+            self._alert("file list recieved")
+            filelist = pickle.loads( request )
+            for key in filelist:
+                self._addFileToUIList(filelist[key])
+        else:
+            self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
 
     def _get_buddy(self, cs_handle):
         """Get a Buddy from a channel specific handle."""
-        self._logger.debug('Trying to find owner of handle %u...', cs_handle)
+        self._logger.debug('Trying to find owner of handle %u...'% cs_handle)
         group = self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP]
         my_csh = group.GetSelfHandle()
-        self._logger.debug('My handle in that group is %u', my_csh)
+        self._logger.debug('My handle in that group is %u'% my_csh)
         if my_csh == cs_handle:
             handle = self.conn.GetSelfHandle()
-            self._logger.debug('CS handle %u belongs to me, %u', cs_handle, handle)
+            self._logger.debug('CS handle %u belongs to me, %u' % (cs_handle, handle))
         elif group.GetGroupFlags() & telepathy.CHANNEL_GROUP_FLAG_CHANNEL_SPECIFIC_HANDLES:
             handle = group.GetHandleOwners([cs_handle])[0]
-            self._logger.debug('CS handle %u belongs to %u', cs_handle, handle)
+            self._logger.debug('CS handle %u belongs to %u' % (cs_handle, handle))
         else:
             handle = cs_handle
-            self._logger.debug('non-CS handle %u belongs to itself', handle)
+            self._logger.debug('non-CS handle %u belongs to itself' % handle)
             # XXX: deal with failure to get the handle owner
             assert handle != 0
         return self.pservice.get_buddy_by_telepathy_handle(
@@ -256,7 +263,7 @@ class TubeSpeak(ExportedGObject):
 
     def __init__(self, tube, is_initiator, text_received_cb, alert, get_buddy, get_fileList):
         super(TubeSpeak, self).__init__(tube, PATH)
-        self._logger = logging.getLogger('FileShare-activity.TubeSpeak')
+        self._logger = logging.getLogger('fileshare-activity.TubeSpeak')
         self.tube = tube
         self.is_initiator = is_initiator
         self.text_received_cb = text_received_cb
@@ -267,17 +274,14 @@ class TubeSpeak(ExportedGObject):
         self.tube.watch_participants(self.participant_change_cb)
 
     def participant_change_cb(self, added, removed):
-        self._logger.debug('Tube: Added participants: %r', added)
-        self._logger.debug('Tube: Removed participants: %r', removed)
         for handle, bus_name in added:
             buddy = self._get_buddy(handle)
             if buddy is not None:
-                self._logger.debug('Tube: Handle %u (Buddy %s) was added',
-                                   handle, buddy.props.nick)
+                self._logger.debug('Tube: Handle %u (Buddy %s) was added' % (handle, buddy.props.nick ))
         for handle in removed:
             buddy = self._get_buddy(handle)
             if buddy is not None:
-                self._logger.debug('Buddy %s was removed' , buddy.props.nick)
+                self._logger.debug('Buddy %s was removed' % buddy.props.nick)
         if not self.entered:
             if self.is_initiator:
                 self._logger.debug("I'm initiating the tube.")
@@ -304,12 +308,9 @@ class TubeSpeak(ExportedGObject):
         if sender == self.tube.get_unique_name():
             # sender is my bus name, so ignore my own signal
             return
-        self._logger.debug('Newcomer %s has joined', sender)
-        self._logger.debug('Welcoming newcomer and sending them data')
+        self._logger.debug('Welcoming %s and sending them data' % sender)
 
-        self._alert('Newcomer %s has joined', sender)
-        ##TODO THIS SHOULD BE THE FILE LIST
-        self.tube.get_object(sender, PATH).FileList("File List should go here", dbus_interface=IFACE)
+        self.tube.get_object(sender, PATH).FileList(self.getFileList(), dbus_interface=IFACE)
 
     def requestFile_cb(self, fileId, sender=None):
         """Somebody requested a file."""
@@ -322,8 +323,7 @@ class TubeSpeak(ExportedGObject):
     @method(dbus_interface=IFACE, in_signature='s', out_signature='')
     def FileList(self, fileList):
         """To be called on the incoming XO after they Hello."""
-        self._logger.debug('Somebody called FileList and sent me %s', fileList)
-        self._alert('FileList', 'Received %s' % fileList)
+        self._logger.debug('Somebody called FileList and sent me %s' % fileList)
         self.text_received_cb('filelist',fileList)
 
 
