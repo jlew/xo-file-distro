@@ -27,7 +27,7 @@ class FileShareActivity(Activity):
                 self.fileIndex = self.fileIndex + 1
                 self.sharedFileObjects[self.fileIndex] = jobject
 
-                fileType = "File" if str(jobject.metadata['activity_id']) == "" else "Journal Activity Entry"
+                fileType =  "Journal Activity Entry" if jobject.get_file_path() == "" else "File"
                 title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
 
                 self._addFileToUIList( [self.fileIndex, title, fileType] )
@@ -198,8 +198,8 @@ class FileShareActivity(Activity):
         self._logger.debug('Buddy %s left' % buddy.props.nick)
         self._alert('Buddy left', '%s left' % buddy.props.nick)
 
-    def _alert(self, title, text=None):
-        alert = NotifyAlert(timeout=5)
+    def _alert(self, title, text=None, timeout=5):
+        alert = NotifyAlert(timeout=timeout)
         alert.props.title = title
         alert.props.msg = text
         self.add_alert(alert)
