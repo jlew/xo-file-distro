@@ -49,7 +49,7 @@ class FileShareActivity(Activity):
             model, iter = self.treeview.get_selection().get_selected()
 
             if self.fcTube:
-                self.fcTube.RequestFile( model.get_value(iter, 0) )
+                self.fcTube.RequestFile( str( model.get_value(iter, 0) ) )
 
 
     def _addFileToUIList(self, listDict):
@@ -315,9 +315,9 @@ class TubeSpeak(ExportedGObject):
     def requestFile_cb(self, fileId, sender=None):
         """Somebody requested a file."""
         self._logger.debug('A file was requeted by %s' % sender)
-        self.alert('A file (id: %d) was requeted by %s' % (fileId,sender) )
+        self._alert('A file (id: %d) was requeted by %s' % (int(fileId),sender) )
         ##TOD) SEND FILE
-        #self.tube.get_object(sender, PATH).FileList("TEST FILE LIST", dbus_interface=IFACE)
+        #self.tube.get_object(sender, PATH).File("TEST FILE LIST", dbus_interface=IFACE)
 
 
     @method(dbus_interface=IFACE, in_signature='s', out_signature='')
@@ -341,5 +341,5 @@ class TubeSpeak(ExportedGObject):
     def RequestFile(self, fileId):
         """Send some text to all participants."""
         self.fileId = fileId
-        self._logger.debug('Request File: %s' % text)
-        self._alert('Reuqest File', 'Requested %s' % text)
+        self._logger.debug('Request File: %s' % fileId)
+        self._alert('Reuqest File', 'Requested %s' % fileId)
