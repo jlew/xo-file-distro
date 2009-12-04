@@ -188,16 +188,6 @@ class FileShareActivity(Activity):
             reply_handler=self._list_tubes_reply_cb,
             error_handler=self._list_tubes_error_cb)
 
-    def _buddy_joined_cb (self, activity, buddy):
-        """Called when a buddy joins the shared activity."""
-        self._logger.debug('Buddy %s joined' % buddy.props.nick)
-        self._alert('Buddy joined', '%s joined' % buddy.props.nick)
-
-    def _buddy_left_cb (self, activity, buddy):
-        """Called when a buddy leaves the shared activity."""
-        self._logger.debug('Buddy %s left' % buddy.props.nick)
-        self._alert('Buddy left', '%s left' % buddy.props.nick)
-
     def _alert(self, title, text=None, timeout=5):
         alert = NotifyAlert(timeout=timeout)
         alert.props.title = title
