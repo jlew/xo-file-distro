@@ -1,24 +1,78 @@
-import logging
 import gtk
 import telepathy
 import pickle
+import tempfile
+import os
+import journalentrybundle
+import dbus
+import gobject
 
 from sugar.activity.activity import Activity, ActivityToolbox
 from sugar.graphics.objectchooser import ObjectChooser
 from sugar.graphics.alert import NotifyAlert
-from sugar.presence import presenceservice
 from sugar.presence.tubeconn import TubeConnection
+from sugar import network
 
-from dbus.service import method, signal
-from dbus.gobject_service import ExportedGObject
+from TubeSpeak import TubeSpeak
+
+import logging
+_logger = logging.getLogger('fileshare-activity')
 
 SERVICE = "org.laptop.FileShare"
 IFACE = SERVICE
 PATH = "/org/laptop/FileShare"
+DIST_STREAM_SERVICE = 'fileshare-activity-http'
+
+class MyHTTPRequestHandler(network.ChunkedGlibHTTPRequestHandler):
+    def translate_path(self, path):
+        return self.server._pathBuilder( path )
+
+class MyHTTPServer(network.GlibTCPServer):
+    def __init__(self, server_address, pathBuilder):
+        self._pathBuilder = pathBuilder
+        network.GlibTCPServer.__init__(self, server_address, MyHTTPRequestHandler)
 
 class FileShareActivity(Activity):
+    def __init__(self, handle):
+        Activity.__init__(self, handle)
+        #wait a moment so that our debug console capture mistakes
+        gobject.idle_add( self._doInit, None )
+
+    def _doInit(self, handle):
+        _logger.info("activity running")
+
+        # Make a temp directory to hold all files
+        self._filepath = tempfile.mkdtemp()
+
+        # Port the file server will do http transfers
+        self.port = 1024 + (hash(self._activity_id) % 64511)
+
+        # Data structures for holding file lists
+        self.sharedFiles = {}
+        self.sharedFileObjects = {}
+        self.fileIndex = 0
+
+        # Holds the controll tube
+        self.controlTube = None
+
+        # Holds tubes for transfers
+        self.unused_download_tubes = set()
+
+        # Are we the ones creating the control tube
+        self.initiating = False
+
+        # Build and display gui
+        self._buildGui()
+
+        # Connect to shaied and join calls
+        self.connect('shared', self._shared_cb)
+        self.connect('joined', self._joined_cb)
+
+
+
+
     def requestAddFile(self, widget, data=None):
-        self._logger.info('Requesting to add file')
+        _logger.info('Requesting to add file')
 
         chooser = ObjectChooser()
         try:
@@ -30,6 +84,11 @@ class FileShareActivity(Activity):
                 fileType =  "Journal Activity Entry" if jobject.get_file_path() == "" else "File"
                 title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
 
+                bundle_path = os.path.join(self._filepath, '%i.xoj' % self.fileIndex)
+
+                journalentrybundle.from_jobject(jobject, bundle_path)
+                self._alert("File Bundle","File bundle has been created: %s" %bundle_path)
+
                 self._addFileToUIList( [self.fileIndex, title, fileType] )
 
                 #TODO: IF SHARED, SEND NEW FILE LIST
@@ -38,7 +97,7 @@ class FileShareActivity(Activity):
             del chooser
 
     def requestRemFile(self, widget, data=None):
-        self._logger.info('Requesting to delete file')
+        _logger.info('Requesting to delete file')
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
             key = model.get_value(iter, 0)
@@ -47,12 +106,13 @@ class FileShareActivity(Activity):
             model.remove( iter )
 
     def requestDownloadFile(self, widget, data=None):
-        self._logger.info('Requesting to Download file')
+        _logger.info('Requesting to Download file')
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
 
-            if self.fcTube:
-                self.fcTube.RequestFile( str( model.get_value(iter, 0) ) )
+            #if self.fcTube:
+            #    self.fcTube.RequestFile( str( model.get_value(iter, 0) ) )
+            self._get_document(str( model.get_value(iter, 0)))
 
 
     def _addFileToUIList(self, listDict):
@@ -64,7 +124,17 @@ class FileShareActivity(Activity):
     def getFileList(self):
         return pickle.dumps(self.sharedFiles)
 
+    def getFileObject(self, id):
+        return self.sharedFileObjects[id]
+
+    def filePathBuilder(self, path):
+        self._alert("path requested", path)
+        #TODO: BUILD OBJECT IF NOT HAVE A PATH
+        return self.sharedFileObjects[path].get_file_path()
+
     def _buildGui(self):
+        self.set_title('File Share')
+
         # Create Toolbox
         ################
         toolbox = ActivityToolbox(self)
@@ -125,59 +195,40 @@ class FileShareActivity(Activity):
         self.set_canvas(table)
         self.show_all()
 
-    def __init__(self, handle):
-        Activity.__init__(self, handle)
-        self._logger = logging.getLogger('fileshare-activity')
-
-        self._logger.info("activity running")
-
-        self.sharedFiles = {}
-        self.sharedFileObjects = {}
-        self.fileIndex = 0
-
-        self.set_title('File Share')
-        self._buildGui()
-
-        self.fcTube = None  # Shared session
-        self.initiating = False
-
-        # get the Presence Service
-        self.pservice = presenceservice.get_instance()
-
-        # Buddy object for you
-        owner = self.pservice.get_owner()
-        self.owner = owner
-
-        self.connect('shared', self._shared_cb)
-        self.connect('joined', self._joined_cb)
 
     def _shared_cb(self, activity):
-        self._logger.debug('Activity is now shared')
+        _logger.debug('Activity is now shared')
         self.initiating = True
-        self._sharing_setup()
 
-        self._logger.debug('This is my activity: making a tube...')
-        id = self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].OfferDBusTube(
-            SERVICE, {})
+        # Add hooks for new tubes.
+        self.watch_for_tubes()
+
+        #Create Shared tube
+        _logger.debug('This is my activity: making a tube...')
+
+        # Offor control tube (callback will put it into crontrol tube var)
+        self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].OfferDBusTube( SERVICE, {})
+
+        #Get ready to share files
+        self._share_document()
 
     def _joined_cb(self, activity):
-        if not self._shared_activity:
-            return
 
-        self._logger.debug('Joined an existing shared activity')
+        _logger.debug('Joined an existing shared activity')
         self.initiating = False
-        self._sharing_setup()
 
-        self._logger.debug('This is not my activity: waiting for a tube...')
-        self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].ListTubes(
-            reply_handler=self._list_tubes_reply_cb,
-            error_handler=self._list_tubes_error_cb)
+        # Add hooks for new tubes.
+        self.watch_for_tubes()
 
-    def _sharing_setup(self):
-        if self._shared_activity is None:
-            self._logger.error('Failed to share or join activity')
-            return
+        # Normally, we would just ask for the document.
+        # This activity allows the user to request files.
+        # The server will send us the file list and then we
+        # can use any new tubes to download the file
 
+
+
+    def watch_for_tubes(self):
+        """This method sets up the listeners for new tube connections"""
         self.conn = self._shared_activity.telepathy_conn
         self.tubes_chan = self._shared_activity.telepathy_tubes_chan
 
@@ -187,6 +238,36 @@ class FileShareActivity(Activity):
         self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].ListTubes(
             reply_handler=self._list_tubes_reply_cb,
             error_handler=self._list_tubes_error_cb)
+
+    def _share_document(self):
+         _logger.info("Ready to share document, starting file server")
+        # FIXME: should ideally have the fileserver listen on a Unix socket
+        # instead of IPv4 (might be more compatible with Rainbow)
+
+        # Create a fileserver to serve files
+        self._fileserver = MyHTTPServer(("", self.port), self.filePathBuilder)
+
+        # Make a tube for it
+        chan = self._shared_activity.telepathy_tubes_chan
+        iface = chan[telepathy.CHANNEL_TYPE_TUBES]
+        self._fileserver_tube_id = iface.OfferStreamTube(DIST_STREAM_SERVICE,
+                {},
+                telepathy.SOCKET_ADDRESS_TYPE_IPV4,
+                ('127.0.0.1', dbus.UInt16(self.port)),
+                telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0)
+
+    def _get_document(self,fileId):
+        # Pick an arbitrary tube we can try to download the document from
+        try:
+            tube_id = self.unused_download_tubes.pop()
+        except (ValueError, KeyError), e:
+            _logger.debug('No tubes to get the document from right now: %s', e)
+            self._alert("File Download Cannot start","The tubes are clogged. Wait for empty tube")
+            return False
+
+        # Download the file at next avaialbe time.
+        gobject.idle_add(self._download_document, tube_id, fileId)
+        return False
 
     def _alert(self, title, text=None, timeout=5):
         alert = NotifyAlert(timeout=timeout)
@@ -204,22 +285,29 @@ class FileShareActivity(Activity):
             self._new_tube_cb(*tube_info)
 
     def _list_tubes_error_cb(self, e):
-        self._logger.error('ListTubes() failed: %s' % e)
+        _loggerg.error('ListTubes() failed: %s', e)
 
     def _new_tube_cb(self, id, initiator, type, service, params, state):
-        self._logger.debug('New tube: ID=%d initator=%d type=%d service=%s '
-                     'params=%r state=%d' % (id, initiator, type, service,
-                     params, state))
+        _logger.debug('New tube: ID=%d initator=%d type=%d service=%s '
+                     'params=%r state=%d', id, initiator, type, service, params, state)
         if (type == telepathy.TUBE_TYPE_DBUS and service == SERVICE):
             if state == telepathy.TUBE_STATE_LOCAL_PENDING:
                 self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].AcceptDBusTube(id)
-            tube_conn = TubeConnection(self.conn,
-                self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES],
-                id, group_iface=self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP])
-            self.fcTube = TubeSpeak(tube_conn, self.initiating,
+
+            if self.controlTube:
+                # Control tube has been created, must be a data tube, store for later
+                _logger.debug("New data tube added")
+                self.unused_download_tubes.add(id)
+            else:
+                # Must be the control tube connection
+                _logger.debug("Connecting to Control Tube")
+                tube_conn = TubeConnection(self.conn,
+                    self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES],
+                    id, group_iface=self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP])
+
+                self.controlTube = TubeSpeak(tube_conn, self.initiating,
                                       self.incomingRequest,
                                       self._alert,
-                                      self._get_buddy,
                                       self.getFileList)
 
     def incomingRequest(self,action,request):
@@ -228,111 +316,52 @@ class FileShareActivity(Activity):
             filelist = pickle.loads( request )
             for key in filelist:
                 self._addFileToUIList(filelist[key])
+
         else:
             self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
 
-    def _get_buddy(self, cs_handle):
-        """Get a Buddy from a channel specific handle."""
-        self._logger.debug('Trying to find owner of handle %u...'% cs_handle)
-        group = self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP]
-        my_csh = group.GetSelfHandle()
-        self._logger.debug('My handle in that group is %u'% my_csh)
-        if my_csh == cs_handle:
-            handle = self.conn.GetSelfHandle()
-            self._logger.debug('CS handle %u belongs to me, %u' % (cs_handle, handle))
-        elif group.GetGroupFlags() & telepathy.CHANNEL_GROUP_FLAG_CHANNEL_SPECIFIC_HANDLES:
-            handle = group.GetHandleOwners([cs_handle])[0]
-            self._logger.debug('CS handle %u belongs to %u' % (cs_handle, handle))
-        else:
-            handle = cs_handle
-            self._logger.debug('non-CS handle %u belongs to itself' % handle)
-            # XXX: deal with failure to get the handle owner
-            assert handle != 0
-        return self.pservice.get_buddy_by_telepathy_handle(
-            self.conn.service_name, self.conn.object_path, handle)
+    def _download_document(self, tube_id, documentId):
+        bundle_path = os.path.join(self._filepath, '%i.xoj' % documentId)
 
+        # FIXME: should ideally have the CM listen on a Unix socket
+        # instead of IPv4 (might be more compatible with Rainbow)
+        chan = self._shared_activity.telepathy_tubes_chan
+        iface = chan[telepathy.CHANNEL_TYPE_TUBES]
+        addr = iface.AcceptStreamTube(tube_id,
+                telepathy.SOCKET_ADDRESS_TYPE_IPV4,
+                telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0,
+                utf8_strings=True)
+        _logger.debug('Accepted stream tube: listening address is %r', addr)
+        # SOCKET_ADDRESS_TYPE_IPV4 is defined to have addresses of type '(sq)'
+        assert isinstance(addr, dbus.Struct)
+        assert len(addr) == 2
+        assert isinstance(addr[0], str)
+        assert isinstance(addr[1], (int, long))
+        assert addr[1] > 0 and addr[1] < 65536
+        port = int(addr[1])
 
-class TubeSpeak(ExportedGObject):
+        getter = network.GlibURLDownloader("http://%s:%d/document/%d"
+                                           % (addr[0], port,documentId))
+        getter.connect("finished", self._download_result_cb, tube_id)
+        getter.connect("progress", self._download_progress_cb, tube_id)
+        getter.connect("error", self._download_error_cb, tube_id)
+        _logger.debug("Starting download to %s...", bundle_path)
+        getter.start(bundle_path)
+        return False
 
-    def __init__(self, tube, is_initiator, text_received_cb, alert, get_buddy, get_fileList):
-        super(TubeSpeak, self).__init__(tube, PATH)
-        self._logger = logging.getLogger('fileshare-activity.TubeSpeak')
-        self.tube = tube
-        self.is_initiator = is_initiator
-        self.text_received_cb = text_received_cb
-        self._alert = alert
-        self.entered = False  # Have we set up the tube?
-        self._get_buddy = get_buddy  # Converts handle to Buddy object
-        self.getFileList = get_fileList
-        self.tube.watch_participants(self.participant_change_cb)
+    def _download_result_cb(self, getter, tempfile, suggested_name, tube_id):
+        _logger.debug("Got document %s (%s) from tube %u", tempfile, suggested_name, tube_id)
+        bundle = journalentrybundle.JournalEntryBundle(tempfile)
+        _logger.debug("Saving %s to datastore...", tempfile)
+        bundle.install()
+        self._alert( "File Downloaded", bundle.get_metadata()['title'])
 
-    def participant_change_cb(self, added, removed):
-        for handle, bus_name in added:
-            buddy = self._get_buddy(handle)
-            if buddy is not None:
-                self._logger.debug('Tube: Handle %u (Buddy %s) was added' % (handle, buddy.props.nick ))
-        for handle in removed:
-            buddy = self._get_buddy(handle)
-            if buddy is not None:
-                self._logger.debug('Buddy %s was removed' % buddy.props.nick)
-        if not self.entered:
-            if self.is_initiator:
-                self._logger.debug("I'm initiating the tube.")
-                self.add_join_handler()
-            else:
-                self._logger.debug('Requesting file data')
-                self.announceJoin()
-        self.entered = True
+    def _download_progress_cb(self, getter, bytes_downloaded, tube_id):
+        # FIXME: signal the expected size somehow, so we can draw a progress
+        # bar
+        _logger.debug("Downloaded %u bytes from tube %u...",bytes_downloaded, tube_id)
 
-    @signal(dbus_interface=IFACE, signature='')
-    def announceJoin(self):
-        self._logger.debug('Announced join.')
-
-    def add_join_handler(self):
-        self._logger.debug('Adding join handler.')
-        # Watch for announceJoin
-        self.tube.add_signal_receiver(self.announceJoin_cb, 'announceJoin', IFACE,
-            path=PATH, sender_keyword='sender')
-        self.tube.add_signal_receiver(self.requestFile_cb, 'RequestFile', IFACE,
-            path=PATH, sender_keyword='sender')
-
-    def announceJoin_cb(self, sender=None):
-        """Somebody joined."""
-        if sender == self.tube.get_unique_name():
-            # sender is my bus name, so ignore my own signal
-            return
-        self._logger.debug('Welcoming %s and sending them data' % sender)
-
-        self.tube.get_object(sender, PATH).FileList(self.getFileList(), dbus_interface=IFACE)
-
-    def requestFile_cb(self, fileId, sender=None):
-        """Somebody requested a file."""
-        self._logger.debug('A file was requeted by %s' % sender)
-        self._alert('A file (id: %d) was requeted by %s' % (int(fileId),sender) )
-        ##TOD) SEND FILE
-        #self.tube.get_object(sender, PATH).File("TEST FILE LIST", dbus_interface=IFACE)
-
-
-    @method(dbus_interface=IFACE, in_signature='s', out_signature='')
-    def FileList(self, fileList):
-        """To be called on the incoming XO after they Hello."""
-        self._logger.debug('Somebody called FileList and sent me %s' % fileList)
-        self.text_received_cb('filelist',fileList)
-
-
-    #def sendMesg_cb(self, text, sender=None):
-    #    """Handler for somebody sending SendText"""
-    #    if sender == self.tube.get_unique_name():
-    #        # sender is my bus name, so ignore my own signal
-    #        return
-    #    self._logger.debug('%s sent text %s', sender, text)
-    #    self._alert('sendMesg_cb', 'Received %s', text)
-    #    self.text = text
-    #    self.text_received_cb(text)
-
-    @signal(dbus_interface=IFACE, signature='s')
-    def RequestFile(self, fileId):
-        """Send some text to all participants."""
-        self.fileId = fileId
-        self._logger.debug('Request File: %s' % fileId)
-        self._alert('Reuqest File', 'Requested %s' % fileId)
+    def _download_error_cb(self, getter, err, tube_id):
+        _logger.debug("Error getting document from tube %u: %s", tube_id, err )
+        self._alert("Error getting document", err)
+        #gobject.idle_add(self._get_document)
