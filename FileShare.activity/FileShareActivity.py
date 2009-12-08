@@ -240,7 +240,7 @@ class FileShareActivity(Activity):
             error_handler=self._list_tubes_error_cb)
 
     def _share_document(self):
-         _logger.info("Ready to share document, starting file server")
+        _logger.info("Ready to share document, starting file server")
         # FIXME: should ideally have the fileserver listen on a Unix socket
         # instead of IPv4 (might be more compatible with Rainbow)
 
