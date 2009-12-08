@@ -155,8 +155,12 @@ class JournalEntryBundle(Bundle):
             self.set_preview(str(metadata['preview']))
             metadata['preview'] = entry_id
 
-        encoded_metadata = json.dumps(metadata)
-        #encoded_metadata = json.write(metadata)
+        # Check if has write method otherwise must be newer lib that uses dumps
+        if hasattr(json, "write"):
+            encoded_metadata = json.write(metadata)
+        else:
+            encoded_metadata = json.dumps(metadata)
+
         zip_file = zipfile.ZipFile(self._path,'a')
         zip_file.writestr(os.path.join(entry_id, "_metadata.json"), encoded_metadata)
         zip_file.close()
@@ -170,8 +174,12 @@ class JournalEntryBundle(Bundle):
         except:
             raise MalformedBundleException('Bundle must contain the file "_metadata.json".')
         zip_file.close()
-        return json.loads(encoded_data)
-        #return json.read(encoded_data)
+
+        # Check if has read method otherwise must be newer lib that uses loads
+        if hasattr( json, "read" ):
+            return json.read(encoded_data)
+        else:
+            return json.loads(encoded_data)
 
     def set_file(self, infile):
         entry_id = self.get_entry_id()
