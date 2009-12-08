@@ -64,7 +64,7 @@ class JournalEntryBundle(Bundle):
 
     def __init__(self, path):
         Bundle.__init__(self, path)
-        
+
     def get_entry_id(self):
         try:
             zip_file = zipfile.ZipFile(self._path,'r')
@@ -79,7 +79,7 @@ class JournalEntryBundle(Bundle):
 
         zip_root_dir = file_names[0].split('/')[0]
         return zip_root_dir
-    
+
     def set_entry_id(self, entry_id):
         zip_file = zipfile.ZipFile(self._path,'a')
         file_names = zip_file.namelist()
@@ -115,17 +115,17 @@ class JournalEntryBundle(Bundle):
                 os.chmod(jobject.file_path, RW_R__R__)
                 datastore.write(jobject)
             finally:
-                jobject.destroy()     
+                jobject.destroy()
         finally:
             shutil.rmtree(bundle_dir, ignore_errors=True)
-    
+
     def set_preview(self, preview_data):
         entry_id = self.get_entry_id()
         preview_path = os.path.join(entry_id, 'preview', entry_id)
         zip_file = zipfile.ZipFile(self._path,'a')
         zip_file.writestr(preview_path, preview_data)
         zip_file.close()
-    
+
     def get_preview(self):
         entry_id = self.get_entry_id()
         preview_path = os.path.join(entry_id, 'preview', entry_id)
@@ -140,26 +140,27 @@ class JournalEntryBundle(Bundle):
     def is_installed(self):
         # These bundles can be reinstalled as many times as desired.
         return False
-    
+
     def set_metadata(self, metadata):
         metadata = _sanitize_dbus_dict(metadata)
         try:
             entry_id = self.get_entry_id()
-            if entry_id != metadata[uid]:
-                raise InvalidPathException("metadata's entry id is different from my entry id")
+            #if entry_id != metadata[uid]:
+            #    raise InvalidPathException("metadata's entry id is different from my entry id")
         except MalformedBundleException:
             entry_id = metadata['activity_id']
             self.set_entry_id(entry_id)
-        
+
         if 'preview' in metadata:
             self.set_preview(str(metadata['preview']))
             metadata['preview'] = entry_id
-        
-        encoded_metadata = json.write(metadata)
+
+        encoded_metadata = json.dumps(metadata)
+        #encoded_metadata = json.write(metadata)
         zip_file = zipfile.ZipFile(self._path,'a')
         zip_file.writestr(os.path.join(entry_id, "_metadata.json"), encoded_metadata)
         zip_file.close()
-    
+
     def get_metadata(self):
         entry_id = self.get_entry_id()
         zip_file = zipfile.ZipFile(self._path,'r')
@@ -169,15 +170,16 @@ class JournalEntryBundle(Bundle):
         except:
             raise MalformedBundleException('Bundle must contain the file "_metadata.json".')
         zip_file.close()
-        return json.read(encoded_data)
-    
+        return json.loads(encoded_data)
+        #return json.read(encoded_data)
+
     def set_file(self, infile):
         entry_id = self.get_entry_id()
         file_path = os.path.join(entry_id, entry_id)
         zip_file = zipfile.ZipFile(self._path, 'a')
         zip_file.write(infile, file_path)
         zip_file.close()
-    
+
     def get_file(self):
         entry_id = self.get_entry_id()
         file_path = os.path.join(entry_id, entry_id)
