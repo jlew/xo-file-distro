@@ -1,4 +1,7 @@
 FileShareActivity.py
+TubeSpeak.py
 setup.py
 activity/activity.info
 activity/activity-fileshare.svg
+journalentrybundle.py
+bundle.py
