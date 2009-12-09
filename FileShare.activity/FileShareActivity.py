@@ -69,8 +69,6 @@ class FileShareActivity(Activity):
         self.connect('joined', self._joined_cb)
 
 
-
-
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
 
@@ -129,7 +127,10 @@ class FileShareActivity(Activity):
 
     def filePathBuilder(self, path):
         if self.sharedFiles.has_key( int(path[1:]) ):
-            return os.path.join(self._filepath, '%s.xoj' % path)
+            return os.path.join(self._filepath, '%s.xoj' % path[1:])
+        else:
+            self._alert("INVALID PATH",path[1:])
+
     def _buildGui(self):
         self.set_title('File Share')
 
@@ -308,7 +309,6 @@ class FileShareActivity(Activity):
 
     def incomingRequest(self,action,request):
         if action == "filelist":
-            self._alert("file list recieved")
             filelist = pickle.loads( request )
             for key in filelist:
                 self._addFileToUIList(filelist[key])
