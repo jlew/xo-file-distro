@@ -107,9 +107,11 @@ class JournalEntryBundle(Bundle):
                 preview = self.get_preview()
                 if preview != '':
                     jobject.metadata['preview'] = dbus.ByteArray(preview)
-
                 jobject.metadata['uid'] = ''
-                del jobject.metadata['mountpoint']
+
+                if jobject.metadata.has_key('mountpoint'):
+                    del jobject.metadata['mountpoint']
+
                 jobject.file_path = os.path.join(bundle_dir, uid)
                 os.chmod(bundle_dir, RWXR_XR_X)
                 os.chmod(jobject.file_path, RW_R__R__)
