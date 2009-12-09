@@ -128,10 +128,8 @@ class FileShareActivity(Activity):
         return self.sharedFileObjects[id]
 
     def filePathBuilder(self, path):
-        self._alert("path requested", path)
-        #TODO: BUILD OBJECT IF NOT HAVE A PATH
-        return self.sharedFileObjects[path].get_file_path()
-
+        if self.sharedFiles.has_key( int(path[1:]) ):
+            return os.path.join(self._filepath, '%s.xoj' % path)
     def _buildGui(self):
         self.set_title('File Share')
 
@@ -293,22 +291,20 @@ class FileShareActivity(Activity):
         if (type == telepathy.TUBE_TYPE_DBUS and service == SERVICE):
             if state == telepathy.TUBE_STATE_LOCAL_PENDING:
                 self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES].AcceptDBusTube(id)
+            # Control tube
+            _logger.debug("Connecting to Control Tube")
+            tube_conn = TubeConnection(self.conn,
+                self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES], id,
+                group_iface=self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP])
 
-            if self.controlTube:
-                # Control tube has been created, must be a data tube, store for later
+            self.controlTube = TubeSpeak(tube_conn, self.initiating,
+                                         self.incomingRequest,
+                                         self._alert, self.getFileList)
+        elif (type == telepathy.TUBE_TYPE_STREAM and service == DIST_STREAM_SERVICE):
+                # Data tube, store for later
                 _logger.debug("New data tube added")
                 self.unused_download_tubes.add(id)
-            else:
-                # Must be the control tube connection
-                _logger.debug("Connecting to Control Tube")
-                tube_conn = TubeConnection(self.conn,
-                    self.tubes_chan[telepathy.CHANNEL_TYPE_TUBES],
-                    id, group_iface=self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP])
 
-                self.controlTube = TubeSpeak(tube_conn, self.initiating,
-                                      self.incomingRequest,
-                                      self._alert,
-                                      self.getFileList)
 
     def incomingRequest(self,action,request):
         if action == "filelist":
@@ -321,7 +317,8 @@ class FileShareActivity(Activity):
             self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
 
     def _download_document(self, tube_id, documentId):
-        bundle_path = os.path.join(self._filepath, '%i.xoj' % documentId)
+        _logger.debug('Requesting to download document')
+        bundle_path = os.path.join(self._filepath, '%s.xoj' % documentId)
 
         # FIXME: should ideally have the CM listen on a Unix socket
         # instead of IPv4 (might be more compatible with Rainbow)
@@ -340,28 +337,31 @@ class FileShareActivity(Activity):
         assert addr[1] > 0 and addr[1] < 65536
         port = int(addr[1])
 
-        getter = network.GlibURLDownloader("http://%s:%d/document/%d"
+        getter = network.GlibURLDownloader("http://%s:%d/%s"
                                            % (addr[0], port,documentId))
-        getter.connect("finished", self._download_result_cb, tube_id)
-        getter.connect("progress", self._download_progress_cb, tube_id)
-        getter.connect("error", self._download_error_cb, tube_id)
+        getter.connect("finished", self._download_result_cb, tube_id, documentId)
+        getter.connect("progress", self._download_progress_cb, tube_id, documentId)
+        getter.connect("error", self._download_error_cb, tube_id, documentId)
         _logger.debug("Starting download to %s...", bundle_path)
+        #self._alert("Starting file download")
         getter.start(bundle_path)
         return False
 
-    def _download_result_cb(self, getter, tempfile, suggested_name, tube_id):
+    def _download_result_cb(self, getter, tmp_file, suggested_name, tube_id, fileId):
         _logger.debug("Got document %s (%s) from tube %u", tempfile, suggested_name, tube_id)
-        bundle = journalentrybundle.JournalEntryBundle(tempfile)
-        _logger.debug("Saving %s to datastore...", tempfile)
+
+        bundle = journalentrybundle.JournalEntryBundle(tmp_file)
+        _logger.debug("Saving %s to datastore...", tmp_file)
+        self._alert( "Saving %s to datastore..."% tmp_file, timeout=500)
         bundle.install()
         self._alert( "File Downloaded", bundle.get_metadata()['title'])
 
-    def _download_progress_cb(self, getter, bytes_downloaded, tube_id):
+    def _download_progress_cb(self, getter, bytes_downloaded, tube_id, fileId):
         # FIXME: signal the expected size somehow, so we can draw a progress
         # bar
         _logger.debug("Downloaded %u bytes from tube %u...",bytes_downloaded, tube_id)
 
-    def _download_error_cb(self, getter, err, tube_id):
+    def _download_error_cb(self, getter, err, tube_id, fileId):
         _logger.debug("Error getting document from tube %u: %s", tube_id, err )
         self._alert("Error getting document", err)
         #gobject.idle_add(self._get_document)
