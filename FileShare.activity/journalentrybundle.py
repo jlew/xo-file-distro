@@ -21,7 +21,7 @@ import shutil
 import zipfile
 import stat
 
-import json
+import simplejson as json
 
 import dbus
 from sugar.datastore import datastore
@@ -162,11 +162,7 @@ class JournalEntryBundle(Bundle):
             self.set_preview(str(metadata['preview']))
             metadata['preview'] = entry_id
 
-        # Check if has write method otherwise must be newer lib that uses dumps
-        if hasattr(json, "write"):
-            encoded_metadata = json.write(metadata)
-        else:
-            encoded_metadata = json.dumps(metadata)
+        encoded_metadata = json.dumps(metadata)
 
         zip_file = zipfile.ZipFile(self._path,'a')
         zip_file.writestr(os.path.join(entry_id, "_metadata.json"), encoded_metadata)
@@ -182,11 +178,7 @@ class JournalEntryBundle(Bundle):
             raise MalformedBundleException('Bundle must contain the file "_metadata.json".')
         zip_file.close()
 
-        # Check if has read method otherwise must be newer lib that uses loads
-        if hasattr( json, "read" ):
-            return json.read(encoded_data)
-        else:
-            return json.loads(encoded_data)
+        return json.loads(encoded_data)
 
     def set_file(self, infile):
         entry_id = self.get_entry_id()

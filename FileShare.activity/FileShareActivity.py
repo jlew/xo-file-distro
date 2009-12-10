@@ -1,6 +1,6 @@
 import gtk
 import telepathy
-import pickle
+import simplejson
 import tempfile
 import os
 import journalentrybundle
@@ -120,7 +120,7 @@ class FileShareActivity(Activity):
         modle.append( None, listDict )
 
     def getFileList(self):
-        return pickle.dumps(self.sharedFiles)
+        return simplejson.dumps(self.sharedFiles)
 
     def getFileObject(self, id):
         return self.sharedFileObjects[id]
@@ -317,10 +317,9 @@ class FileShareActivity(Activity):
 
     def incomingRequest(self,action,request):
         if action == "filelist":
-            filelist = pickle.loads( request )
+            filelist = simplejson.loads( request )
             for key in filelist:
                 self._addFileToUIList(filelist[key])
-
         else:
             self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
 
