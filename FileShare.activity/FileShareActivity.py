@@ -79,15 +79,17 @@ class FileShareActivity(Activity):
                 self.fileIndex = self.fileIndex + 1
                 self.sharedFileObjects[self.fileIndex] = jobject
 
-                fileType =  "Journal Activity Entry" if jobject.get_file_path() == "" else "File"
-                title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
 
                 bundle_path = os.path.join(self._filepath, '%i.xoj' % self.fileIndex)
 
                 journalentrybundle.from_jobject(jobject, bundle_path)
-                self._alert("File Bundle","File bundle has been created: %s" %bundle_path)
 
-                self._addFileToUIList( [self.fileIndex, title, fileType] )
+                desc =  str( jobject.metadata['description'] )
+                title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
+                tags = str( jobject.metadata['tags'] )
+                size = os.path.getsize( bundle_path )
+
+                self._addFileToUIList( [self.fileIndex, title, desc, tags, size] )
 
                 #TODO: IF SHARED, SEND NEW FILE LIST
         finally:
@@ -161,26 +163,34 @@ class FileShareActivity(Activity):
         # Create File Tree
         ##################
         table = gtk.Table(rows=10, columns=1, homogeneous=False)
-        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str))
+        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str,str,int))
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn('File Name')
-        colType = gtk.TreeViewColumn('Type')
+        colDesc = gtk.TreeViewColumn('Description')
+        colTags = gtk.TreeViewColumn('Tags')
+        colSize = gtk.TreeViewColumn('File Size')
 
         self.treeview.append_column(colName)
-        self.treeview.append_column(colType)
+        self.treeview.append_column(colDesc)
+        self.treeview.append_column(colTags)
+        self.treeview.append_column(colSize)
 
         # create a CellRendererText to render the data
         self.cell = gtk.CellRendererText()
 
         # add the cell to the tvcolumn and allow it to expand
         colName.pack_start(self.cell, True)
-        colType.pack_start(self.cell, True)
+        colDesc.pack_start(self.cell, True)
+        colTags.pack_start(self.cell, True)
+        colSize.pack_start(self.cell, True)
 
         # set the cell "text" attribute- retrieve text
         # from that column in treestore
         colName.add_attribute(self.cell, 'text', 1)
-        colType.add_attribute(self.cell, 'text', 2)
+        colDesc.add_attribute(self.cell, 'text', 2)
+        colTags.add_attribute(self.cell, 'text', 3)
+        colSize.add_attribute(self.cell, 'text', 4)
 
         # make it searchable
         self.treeview.set_search_column(1)
