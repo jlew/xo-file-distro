@@ -152,6 +152,10 @@ class JournalEntryBundle(Bundle):
             #    raise InvalidPathException("metadata's entry id is different from my entry id")
         except MalformedBundleException:
             entry_id = metadata['activity_id']
+            if( entry_id == "" ):
+                #If the entry_id is empty, (file not activity) then make an entryid
+                import hashlib
+                entry_id = hashlib.sha1(metadata['timestamp']).hexdigest()
             self.set_entry_id(entry_id)
 
         if 'preview' in metadata:
