@@ -84,9 +84,9 @@ class FileShareActivity(Activity):
 
                 journalentrybundle.from_jobject(jobject, bundle_path)
 
-                desc =  str( jobject.metadata['description'] )
+                desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
                 title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
-                tags = str( jobject.metadata['tags'] )
+                tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
                 self._addFileToUIList( [self.fileIndex, title, desc, tags, size] )
@@ -110,8 +110,6 @@ class FileShareActivity(Activity):
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
 
-            #if self.fcTube:
-            #    self.fcTube.RequestFile( str( model.get_value(iter, 0) ) )
             self._get_document(str( model.get_value(iter, 0)))
 
 
