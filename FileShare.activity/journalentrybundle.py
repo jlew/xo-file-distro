@@ -47,7 +47,8 @@ def _sanitize_dbus_dict(dbus_dict):
 def from_jobject(jobject, bundle_path):
     b = JournalEntryBundle(bundle_path)
     b.set_metadata(jobject.get_metadata())
-    b.set_file(jobject.get_file_path())
+    if jobject.get_file_path():
+        b.set_file(jobject.get_file_path())
     return b
 
 class JournalEntryBundle(Bundle):
