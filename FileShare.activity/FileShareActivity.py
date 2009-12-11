@@ -211,8 +211,12 @@ class FileShareActivity(Activity):
         # Allow sorting on the column
         colName.set_sort_column_id(1)
 
+        # Put table into scroll window to allow it to scroll
+        window = gtk.ScrolledWindow()
+        window.add_with_viewport(self.treeview)
+
         table.attach(hbbox,0,1,0,1)
-        table.attach(self.treeview,0,1,1,10)
+        table.attach(window,0,1,1,10)
 
         self.set_canvas(table)
         self.show_all()
