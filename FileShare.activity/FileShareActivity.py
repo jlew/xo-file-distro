@@ -370,6 +370,11 @@ class FileShareActivity(Activity):
         # bar
         _logger.debug("Downloaded %u bytes for document id %d...",bytes_downloaded, fileId)
 
+        # Force gui to update if there are actions pending
+        # Fixes bug where system appears to hang on FAST connections
+        if gtk.events_pending():
+            gtk.main_iteration()
+
     def _download_error_cb(self, getter, err, fileId):
         _logger.debug("Error getting document from tube. %s",  err )
         self._alert("Error getting document", err)
