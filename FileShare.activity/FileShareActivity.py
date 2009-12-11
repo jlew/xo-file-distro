@@ -57,6 +57,7 @@ class FileShareActivity(Activity):
 
         # Holds tubes for transfers
         self.unused_download_tubes = set()
+        self.addr=None
 
         # Are we the ones creating the control tube
         self.initiating = False
@@ -264,16 +265,32 @@ class FileShareActivity(Activity):
                 telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0)
 
     def _get_document(self,fileId):
-        # Pick an arbitrary tube we can try to download the document from
-        try:
-            tube_id = self.unused_download_tubes.pop()
-        except (ValueError, KeyError), e:
-            _logger.debug('No tubes to get the document from right now: %s', e)
-            self._alert("File Download Cannot start","The tubes are clogged. Wait for empty tube")
-            return False
+        if not self.addr:
+            try:
+                tube_id = self.unused_download_tubes.pop()
+            except (ValueError, KeyError), e:
+                _logger.debug('No tubes to get the document from right now: %s', e)
+                self._alert("File Download Cannot start","The tubes are clogged. Wait for empty tube")
+                return False
+            # FIXME: should ideally have the CM listen on a Unix socket
+            # instead of IPv4 (might be more compatible with Rainbow)
+            chan = self._shared_activity.telepathy_tubes_chan
+            iface = chan[telepathy.CHANNEL_TYPE_TUBES]
+            self.addr = iface.AcceptStreamTube(tube_id,
+                    telepathy.SOCKET_ADDRESS_TYPE_IPV4,
+                    telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0,
+                    utf8_strings=True)
+
+            _logger.debug('Accepted stream tube: listening address is %r', self.addr)
+            # SOCKET_ADDRESS_TYPE_IPV4 is defined to have addresses of type '(sq)'
+            assert isinstance(self.addr, dbus.Struct)
+            assert len(self.addr) == 2
+            assert isinstance(self.addr[0], str)
+            assert isinstance(self.addr[1], (int, long))
+            assert self.addr[1] > 0 and self.addr[1] < 65536
 
         # Download the file at next avaialbe time.
-        gobject.idle_add(self._download_document, tube_id, fileId)
+        gobject.idle_add(self._download_document, self.addr, fileId)
         return False
 
     def _alert(self, title, text=None, timeout=5):
@@ -323,39 +340,23 @@ class FileShareActivity(Activity):
         else:
             self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
 
-    def _download_document(self, tube_id, documentId):
+    def _download_document(self, addr, documentId):
         _logger.debug('Requesting to download document')
         bundle_path = os.path.join(self._filepath, '%s.xoj' % documentId)
-
-        # FIXME: should ideally have the CM listen on a Unix socket
-        # instead of IPv4 (might be more compatible with Rainbow)
-        chan = self._shared_activity.telepathy_tubes_chan
-        iface = chan[telepathy.CHANNEL_TYPE_TUBES]
-        addr = iface.AcceptStreamTube(tube_id,
-                telepathy.SOCKET_ADDRESS_TYPE_IPV4,
-                telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0,
-                utf8_strings=True)
-        _logger.debug('Accepted stream tube: listening address is %r', addr)
-        # SOCKET_ADDRESS_TYPE_IPV4 is defined to have addresses of type '(sq)'
-        assert isinstance(addr, dbus.Struct)
-        assert len(addr) == 2
-        assert isinstance(addr[0], str)
-        assert isinstance(addr[1], (int, long))
-        assert addr[1] > 0 and addr[1] < 65536
-        port = int(addr[1])
+        port = int(self.addr[1])
 
         getter = network.GlibURLDownloader("http://%s:%d/%s"
                                            % (addr[0], port,documentId))
-        getter.connect("finished", self._download_result_cb, tube_id, documentId)
-        getter.connect("progress", self._download_progress_cb, tube_id, documentId)
-        getter.connect("error", self._download_error_cb, tube_id, documentId)
+        getter.connect("finished", self._download_result_cb, documentId)
+        getter.connect("progress", self._download_progress_cb, documentId)
+        getter.connect("error", self._download_error_cb, documentId)
         _logger.debug("Starting download to %s...", bundle_path)
         #self._alert("Starting file download")
         getter.start(bundle_path)
         return False
 
-    def _download_result_cb(self, getter, tmp_file, suggested_name, tube_id, fileId):
-        _logger.debug("Got document %s (%s) from tube %u", tempfile, suggested_name, tube_id)
+    def _download_result_cb(self, getter, tmp_file, suggested_name, fileId):
+        _logger.debug("Got document %s (%s)", tempfile, suggested_name)
 
         bundle = journalentrybundle.JournalEntryBundle(tmp_file)
         _logger.debug("Saving %s to datastore...", tmp_file)
@@ -363,12 +364,13 @@ class FileShareActivity(Activity):
         bundle.install()
         self._alert( "File Downloaded", bundle.get_metadata()['title'])
 
-    def _download_progress_cb(self, getter, bytes_downloaded, tube_id, fileId):
+
+    def _download_progress_cb(self, getter, bytes_downloaded, fileId):
         # FIXME: signal the expected size somehow, so we can draw a progress
         # bar
-        _logger.debug("Downloaded %u bytes from tube %u...",bytes_downloaded, tube_id)
+        _logger.debug("Downloaded %u bytes for document id %d...",bytes_downloaded, fileId)
 
-    def _download_error_cb(self, getter, err, tube_id, fileId):
-        _logger.debug("Error getting document from tube %u: %s", tube_id, err )
+    def _download_error_cb(self, getter, err, fileId):
+        _logger.debug("Error getting document from tube. %s",  err )
         self._alert("Error getting document", err)
         #gobject.idle_add(self._get_document)
