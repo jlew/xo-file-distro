@@ -90,7 +90,7 @@ class FileShareActivity(Activity):
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
-                self._addFileToUIList( [self.fileIndex, title, desc, tags, size] )
+                self._addFileToUIList( [self.fileIndex, title, desc, tags, size, 0, ''] )
 
                 #TODO: IF SHARED, SEND NEW FILE LIST
         finally:
@@ -111,7 +111,12 @@ class FileShareActivity(Activity):
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
 
-            self._get_document(str( model.get_value(iter, 0)))
+            if model.get_value(iter, 6) == "":
+                self._get_document(str( model.get_value(iter, 0)))
+            else:
+                self._alert("File has allready or is currently being downloaded")
+        else:
+            self._alert("You must select a file to download")
 
 
     def _addFileToUIList(self, listDict):
@@ -162,34 +167,43 @@ class FileShareActivity(Activity):
         # Create File Tree
         ##################
         table = gtk.Table(rows=10, columns=1, homogeneous=False)
-        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str,str,int))
+        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str,str,int,int,str))
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn('File Name')
         colDesc = gtk.TreeViewColumn('Description')
         colTags = gtk.TreeViewColumn('Tags')
         colSize = gtk.TreeViewColumn('File Size')
+        colProg = gtk.TreeViewColumn('')
 
         self.treeview.append_column(colName)
         self.treeview.append_column(colDesc)
         self.treeview.append_column(colTags)
         self.treeview.append_column(colSize)
 
+        # Don't show progress bar if server
+        if self._shared_activity:
+            self.treeview.append_column(colProg)
+
         # create a CellRendererText to render the data
-        self.cell = gtk.CellRendererText()
+        cell = gtk.CellRendererText()
+        pbar = gtk.CellRendererProgress()
 
         # add the cell to the tvcolumn and allow it to expand
-        colName.pack_start(self.cell, True)
-        colDesc.pack_start(self.cell, True)
-        colTags.pack_start(self.cell, True)
-        colSize.pack_start(self.cell, True)
+        colName.pack_start(cell, True)
+        colDesc.pack_start(cell, True)
+        colTags.pack_start(cell, True)
+        colSize.pack_start(cell, True)
+        colProg.pack_start(pbar, True)
 
         # set the cell "text" attribute- retrieve text
         # from that column in treestore
-        colName.add_attribute(self.cell, 'text', 1)
-        colDesc.add_attribute(self.cell, 'text', 2)
-        colTags.add_attribute(self.cell, 'text', 3)
-        colSize.add_attribute(self.cell, 'text', 4)
+        colName.add_attribute(cell, 'text', 1)
+        colDesc.add_attribute(cell, 'text', 2)
+        colTags.add_attribute(cell, 'text', 3)
+        colSize.add_attribute(cell, 'text', 4)
+        colProg.add_attribute(pbar, 'text', 6)
+        colProg.add_attribute(pbar, 'value', 5)
 
         # make it searchable
         self.treeview.set_search_column(1)
@@ -203,6 +217,16 @@ class FileShareActivity(Activity):
         self.set_canvas(table)
         self.show_all()
 
+    def progress_set(self, id, progress, value ):
+        model = self.treeview.get_model()
+        iter = model.get_iter_first()
+        while iter:
+            if model.get_value( iter, 0 ) == int(id):
+                break
+            iter = model.iter_next( iter )
+
+        model.set_value( iter, 5, progress )
+        model.set_value( iter, 6, value )
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
@@ -351,18 +375,22 @@ class FileShareActivity(Activity):
         getter.connect("progress", self._download_progress_cb, documentId)
         getter.connect("error", self._download_error_cb, documentId)
         _logger.debug("Starting download to %s...", bundle_path)
-        #self._alert("Starting file download")
+        self._alert("Starting file download")
         getter.start(bundle_path)
         return False
 
     def _download_result_cb(self, getter, tmp_file, suggested_name, fileId):
         _logger.debug("Got document %s (%s)", tempfile, suggested_name)
 
+        # Set status to downloaded
+        self.progress_set( fileId, 100, "Saving File")
+
         bundle = journalentrybundle.JournalEntryBundle(tmp_file)
         _logger.debug("Saving %s to datastore...", tmp_file)
-        self._alert( "Saving %s to datastore..."% tmp_file, timeout=500)
         bundle.install()
         self._alert( "File Downloaded", bundle.get_metadata()['title'])
+        self.progress_set( fileId, 100, "Download Complete")
+
 
 
     def _download_progress_cb(self, getter, bytes_downloaded, fileId):
@@ -370,9 +398,15 @@ class FileShareActivity(Activity):
         # bar
         _logger.debug("Downloaded %u bytes for document id %d...",bytes_downloaded, fileId)
 
+        fileInQuestion = self.sharedFiles[int(fileId)]
+        downloadPercent = (float(bytes_downloaded)/float(fileInQuestion[4]))*100.0
+
+        self.progress_set( fileId, downloadPercent,
+            "Downloading %d%% (%d bytes)"%(downloadPercent, bytes_downloaded))
+
         # Force gui to update if there are actions pending
         # Fixes bug where system appears to hang on FAST connections
-        if gtk.events_pending():
+        while gtk.events_pending():
             gtk.main_iteration()
 
     def _download_error_cb(self, getter, err, fileId):
