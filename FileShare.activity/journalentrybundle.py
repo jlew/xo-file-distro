@@ -113,9 +113,12 @@ class JournalEntryBundle(Bundle):
                 if jobject.metadata.has_key('mountpoint'):
                     del jobject.metadata['mountpoint']
 
-                jobject.file_path = os.path.join(bundle_dir, uid)
                 os.chmod(bundle_dir, RWXR_XR_X)
-                os.chmod(jobject.file_path, RW_R__R__)
+
+                if( os.path.exists( os.path.join(bundle_dir, uid) ) ):
+                    jobject.file_path = os.path.join(bundle_dir, uid)
+                    os.chmod(jobject.file_path, RW_R__R__)
+
                 datastore.write(jobject)
             finally:
                 jobject.destroy()
