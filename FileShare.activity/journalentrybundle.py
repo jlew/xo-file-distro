@@ -158,7 +158,12 @@ class JournalEntryBundle(Bundle):
             if( entry_id == "" ):
                 #If the entry_id is empty, (file not activity) then make an entryid
                 import hashlib
-                entry_id = hashlib.sha1(metadata['timestamp']).hexdigest()
+
+                if metadata.has_key('timestamp'):
+                    entry_id = hashlib.sha1(metadata['timestamp']).hexdigest()
+                else:
+                    import time
+                    entry_id = hashlib.sha1( str(time.time()) ).hexdigest()
             self.set_entry_id(entry_id)
 
         if 'preview' in metadata:
