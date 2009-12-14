@@ -6,6 +6,7 @@ import os
 import journalentrybundle
 import dbus
 import gobject
+from gettext import gettext as _
 
 from sugar.activity.activity import Activity, ActivityToolbox
 from sugar.graphics.objectchooser import ObjectChooser
@@ -65,7 +66,7 @@ class FileShareActivity(Activity):
         # Build and display gui
         self._buildGui()
 
-        # Connect to shaied and join calls
+        # Connect to shared and join calls
         self.connect('shared', self._shared_cb)
         self.connect('joined', self._joined_cb)
 
@@ -86,7 +87,7 @@ class FileShareActivity(Activity):
                 journalentrybundle.from_jobject(jobject, bundle_path)
 
                 desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
-                title = "Untitled" if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
+                title = _("Untitled") if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
@@ -114,9 +115,9 @@ class FileShareActivity(Activity):
             if model.get_value(iter, 6) == "":
                 self._get_document(str( model.get_value(iter, 0)))
             else:
-                self._alert("File has allready or is currently being downloaded")
+                self._alert(_("File has allready or is currently being downloaded"))
         else:
-            self._alert("You must select a file to download")
+            self._alert(_("You must select a file to download"))
 
 
     def _addFileToUIList(self, listDict):
@@ -135,7 +136,7 @@ class FileShareActivity(Activity):
         if self.sharedFiles.has_key( int(path[1:]) ):
             return os.path.join(self._filepath, '%s.xoj' % path[1:])
         else:
-            self._alert("INVALID PATH",path[1:])
+            _logger.debug("INVALID PATH",path[1:])
 
     def _buildGui(self):
         self.set_title('File Share')
@@ -151,16 +152,16 @@ class FileShareActivity(Activity):
         hbbox = gtk.HButtonBox()
 
         if not self._shared_activity:
-            addFileButton = gtk.Button("Add File")
+            addFileButton = gtk.Button(_("Add File"))
             addFileButton.connect("clicked", self.requestAddFile, None)
             hbbox.add(addFileButton)
 
-            remFileButton = gtk.Button("Remove Selected File")
+            remFileButton = gtk.Button(_("Remove Selected File"))
             remFileButton.connect("clicked", self.requestRemFile, None)
             hbbox.add(remFileButton)
 
         else:
-            downloadFileButton = gtk.Button("Download File")
+            downloadFileButton = gtk.Button(_("Download File"))
             downloadFileButton.connect("clicked", self.requestDownloadFile, None)
             hbbox.add(downloadFileButton)
 
@@ -170,10 +171,10 @@ class FileShareActivity(Activity):
         self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str,str,int,int,str))
 
         # create the TreeViewColumn to display the data
-        colName = gtk.TreeViewColumn('File Name')
-        colDesc = gtk.TreeViewColumn('Description')
-        colTags = gtk.TreeViewColumn('Tags')
-        colSize = gtk.TreeViewColumn('File Size')
+        colName = gtk.TreeViewColumn(_('File Name'))
+        colDesc = gtk.TreeViewColumn(_('Description'))
+        colTags = gtk.TreeViewColumn(_('Tags'))
+        colSize = gtk.TreeViewColumn(_('File Size'))
         colProg = gtk.TreeViewColumn('')
 
         self.treeview.append_column(colName)
@@ -298,7 +299,7 @@ class FileShareActivity(Activity):
                 tube_id = self.unused_download_tubes.pop()
             except (ValueError, KeyError), e:
                 _logger.debug('No tubes to get the document from right now: %s', e)
-                self._alert("File Download Cannot start","The tubes are clogged. Wait for empty tube")
+                self._alert(_("All tubes are busy, file download cannot start"),_("Please wait and try again"))
                 return False
             # FIXME: should ideally have the CM listen on a Unix socket
             # instead of IPv4 (might be more compatible with Rainbow)
@@ -366,7 +367,7 @@ class FileShareActivity(Activity):
             for key in filelist:
                 self._addFileToUIList(filelist[key])
         else:
-            self._alert("Incoming tube Request: %s. Data: %s" % (action, request) )
+            _logger.debug("Incoming tube Request: %s. Data: %s" % (action, request) )
 
     def _download_document(self, addr, documentId):
         _logger.debug('Requesting to download document')
@@ -379,7 +380,7 @@ class FileShareActivity(Activity):
         getter.connect("progress", self._download_progress_cb, documentId)
         getter.connect("error", self._download_error_cb, documentId)
         _logger.debug("Starting download to %s...", bundle_path)
-        self._alert("Starting file download")
+        self._alert(_("Starting file download"))
         getter.start(bundle_path)
         return False
 
@@ -387,13 +388,13 @@ class FileShareActivity(Activity):
         _logger.debug("Got document %s (%s)", tempfile, suggested_name)
 
         # Set status to downloaded
-        self.progress_set( fileId, 100, "Saving File")
+        self.progress_set( fileId, 100, _("Saving File"))
 
         bundle = journalentrybundle.JournalEntryBundle(tmp_file)
         _logger.debug("Saving %s to datastore...", tmp_file)
         bundle.install()
-        self._alert( "File Downloaded", bundle.get_metadata()['title'])
-        self.progress_set( fileId, 100, "Download Complete")
+        self._alert( _("File Downloaded"), bundle.get_metadata()['title'])
+        self.progress_set( fileId, 100, _("Download Complete"))
 
 
 
@@ -406,7 +407,7 @@ class FileShareActivity(Activity):
         downloadPercent = (float(bytes_downloaded)/float(fileInQuestion[4]))*100.0
 
         self.progress_set( fileId, downloadPercent,
-            "Downloading %d%% (%d bytes)"%(downloadPercent, bytes_downloaded))
+            "%s %d%% (%d %s)"%(_("Downloading"), downloadPercent, bytes_downloaded, _("bytes")))
 
         # Force gui to update if there are actions pending
         # Fixes bug where system appears to hang on FAST connections
@@ -415,5 +416,5 @@ class FileShareActivity(Activity):
 
     def _download_error_cb(self, getter, err, fileId):
         _logger.debug("Error getting document from tube. %s",  err )
-        self._alert("Error getting document", err)
+        self._alert(_("Error getting document"), err)
         #gobject.idle_add(self._get_document)
