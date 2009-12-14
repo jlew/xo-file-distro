@@ -77,7 +77,6 @@ class FileShareActivity(Activity):
         chooser = ObjectChooser()
         try:
             if chooser.run() == gtk.RESPONSE_ACCEPT:
-
                 # get object and build file
                 jobject = chooser.get_selected_object()
 
@@ -137,6 +136,15 @@ class FileShareActivity(Activity):
             model, iter = self.treeview.get_selection().get_selected()
             key = model.get_value(iter, 0)
             self._remFileFromUIList(key)
+
+            # Attempt to remove file from system
+            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
+
+            try:
+                os.remove( bundle_path )
+            except:
+                _logger.warn("Could not remove file from system: %d",bundle_path)
+
 
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
