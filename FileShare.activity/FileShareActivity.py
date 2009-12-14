@@ -158,8 +158,8 @@ class FileShareActivity(Activity):
         modle.append( None, listDict )
 
         # Notify connected users
-        if self.controlTube and not self._shared_activity:
-            self.controlTube.FileAdd( simplejson.dumps(listDict) )
+        if self.initiating:
+                self.controlTube.FileAdd( simplejson.dumps(listDict) )
 
     def _remFileFromUIList(self, id):
         _logger.info('Requesting to delete file')
@@ -176,8 +176,8 @@ class FileShareActivity(Activity):
         model.remove( iter )
 
         # Notify connected users
-        if self.controlTube and not self._shared_activity:
-            self.controlTube.FileAdd( simplejson.dumps(listDict) )
+        if self.initiating:
+            self.controlTube.FileRem( simplejson.dumps(key) )
 
     def getFileList(self):
         return simplejson.dumps(self.sharedFiles)
