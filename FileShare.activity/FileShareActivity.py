@@ -3,6 +3,7 @@ import telepathy
 import simplejson
 import tempfile
 import os
+import time
 import journalentrybundle
 import dbus
 import gobject
@@ -15,6 +16,7 @@ from sugar.presence.tubeconn import TubeConnection
 from sugar import network
 
 from TubeSpeak import TubeSpeak
+from hashlib import sha1
 
 import logging
 _logger = logging.getLogger('fileshare-activity')
@@ -48,10 +50,8 @@ class FileShareActivity(Activity):
         # Port the file server will do http transfers
         self.port = 1024 + (hash(self._activity_id) % 64511)
 
-        # Data structures for holding file lists
+        # Data structures for holding file list
         self.sharedFiles = {}
-        self.sharedFileObjects = {}
-        self.fileIndex = 0
 
         # Holds the controll tube
         self.controlTube = None
@@ -77,23 +77,55 @@ class FileShareActivity(Activity):
         chooser = ObjectChooser()
         try:
             if chooser.run() == gtk.RESPONSE_ACCEPT:
+
+                # get object and build file
                 jobject = chooser.get_selected_object()
-                self.fileIndex = self.fileIndex + 1
-                self.sharedFileObjects[self.fileIndex] = jobject
 
+                if jobject.metadata.has_key("activity_id") and str(jobject.metadata['activity_id']):
+                    objectHash = str(jobject.metadata['activity_id'])
+                    bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
-                bundle_path = os.path.join(self._filepath, '%i.xoj' % self.fileIndex)
+                    # If file in share, return don't build file
+                    if os.path.exists(bundle_path):
+                        self._alert(_("File Not Added"), _("File allready shaired"))
+                        return
 
-                journalentrybundle.from_jobject(jobject, bundle_path)
+                    journalentrybundle.from_jobject(jobject, bundle_path )
 
+                else:
+                    # Unknown activity id, must be a file
+                    if jobject.get_file_path():
+                        # FIXME: This just checks the file hash should check for
+                        # identity by compairing metadata, but this will work for now
+                        # Problems are that if you have one file multiple times it will
+                        # only allow one copy of that file regardless of the metadata
+                        objectHash = sha1(open(jobject.get_file_path() ,'rb').read()).hexdigest()
+                        bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
+
+                        if os.path.exists(bundle_path):
+                            self._alert(_("File Not Added"), _("File allready shaired"))
+                            return
+
+                        journalentrybundle.from_jobject(jobject, bundle_path )
+
+                    else:
+                        # UNKOWN ACTIVTIY, No activity id, no file hash, just add it
+                        # FIXME
+                        _logger.warn("Unknown File Data. Cann't check if file is allready shaired.")
+                        objectHash = sha1(time.time()).hexdigest()
+                        bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
+
+                        journalentrybundle.from_jobject(jobject, bundle_path )
+                        return
+
+                # Build file array
                 desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
                 title = _("Untitled") if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
-                self._addFileToUIList( [self.fileIndex, title, desc, tags, size, 0, ''] )
+                self._addFileToUIList( [objectHash, title, desc, tags, size, 0, ''] )
 
-                #TODO: IF SHARED, SEND NEW FILE LIST
         finally:
             chooser.destroy()
             del chooser
@@ -105,7 +137,6 @@ class FileShareActivity(Activity):
             model, iter = self.treeview.get_selection().get_selected()
             key = model.get_value(iter, 0)
             self._remFileFromUIList(key)
-            del self.sharedFileObjects[key]
 
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
@@ -136,7 +167,7 @@ class FileShareActivity(Activity):
         model = self.treeview.get_model()
         iter = model.get_iter_first()
         while iter:
-            if model.get_value( iter, 0 ) == int(id):
+            if model.get_value( iter, 0 ) == id:
                 break
             iter = model.iter_next( iter )
 
@@ -151,11 +182,8 @@ class FileShareActivity(Activity):
     def getFileList(self):
         return simplejson.dumps(self.sharedFiles)
 
-    def getFileObject(self, id):
-        return self.sharedFileObjects[id]
-
     def filePathBuilder(self, path):
-        if self.sharedFiles.has_key( int(path[1:]) ):
+        if self.sharedFiles.has_key( path[1:] ):
             return os.path.join(self._filepath, '%s.xoj' % path[1:])
         else:
             _logger.debug("INVALID PATH",path[1:])
@@ -190,7 +218,7 @@ class FileShareActivity(Activity):
         # Create File Tree
         ##################
         table = gtk.Table(rows=10, columns=1, homogeneous=False)
-        self.treeview = gtk.TreeView(gtk.TreeStore(int,str,str,str,int,int,str))
+        self.treeview = gtk.TreeView(gtk.TreeStore(str,str,str,str,int,int,str))
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn(_('File Name'))
@@ -248,7 +276,7 @@ class FileShareActivity(Activity):
         model = self.treeview.get_model()
         iter = model.get_iter_first()
         while iter:
-            if model.get_value( iter, 0 ) == int(id):
+            if model.get_value( iter, 0 ) == id:
                 break
             iter = model.iter_next( iter )
 
@@ -429,7 +457,7 @@ class FileShareActivity(Activity):
         # bar
         _logger.debug("Downloaded %u bytes for document id %d...",bytes_downloaded, fileId)
 
-        fileInQuestion = self.sharedFiles[int(fileId)]
+        fileInQuestion = self.sharedFiles[fileId]
         downloadPercent = (float(bytes_downloaded)/float(fileInQuestion[4]))*100.0
 
         self.progress_set( fileId, downloadPercent,
