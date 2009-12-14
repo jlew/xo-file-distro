@@ -99,13 +99,13 @@ class FileShareActivity(Activity):
             del chooser
 
     def requestRemFile(self, widget, data=None):
+        """Removes file from memory then calls rem file from ui"""
         _logger.info('Requesting to delete file')
         if self.treeview.get_selection().count_selected_rows() != 0:
             model, iter = self.treeview.get_selection().get_selected()
             key = model.get_value(iter, 0)
-            del self.sharedFiles[key]
+            self._remFileFromUIList(key)
             del self.sharedFileObjects[key]
-            model.remove( iter )
 
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
@@ -125,6 +125,28 @@ class FileShareActivity(Activity):
         modle = self.treeview.get_model()
 
         modle.append( None, listDict )
+
+        # Notify connected users
+        if self.controlTube and not self._shared_activity:
+            self.controlTube.FileAdd( simplejson.dumps(listDict) )
+
+    def _remFileFromUIList(self, id):
+        _logger.info('Requesting to delete file')
+
+        model = self.treeview.get_model()
+        iter = model.get_iter_first()
+        while iter:
+            if model.get_value( iter, 0 ) == int(id):
+                break
+            iter = model.iter_next( iter )
+
+        key = model.get_value(iter, 0)
+        del self.sharedFiles[key]
+        model.remove( iter )
+
+        # Notify connected users
+        if self.controlTube and not self._shared_activity:
+            self.controlTube.FileAdd( simplejson.dumps(listDict) )
 
     def getFileList(self):
         return simplejson.dumps(self.sharedFiles)
@@ -366,6 +388,10 @@ class FileShareActivity(Activity):
             filelist = simplejson.loads( request )
             for key in filelist:
                 self._addFileToUIList(filelist[key])
+        elif action == "fileadd":
+            self._addFileToUIList( simplejson.loads( request ) )
+        elif action == "filerem":
+            self._remFileFromUIList( simplejson.loads( request ) )
         else:
             _logger.debug("Incoming tube Request: %s. Data: %s" % (action, request) )
 

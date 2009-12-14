@@ -25,30 +25,68 @@ class TubeSpeak(ExportedGObject):
                 self.add_join_handler()
             else:
                 self._logger.debug('Requesting file data')
+                self.add_file_change_handler()
                 self.announceJoin()
         self.entered = True
 
+    #Signals
     @signal(dbus_interface=IFACE, signature='')
     def announceJoin(self):
         self._logger.debug('Announced join.')
 
+    @signal(dbus_interface=IFACE, signature='s')
+    def FileAdd(self, addFile):
+        self._logger.debug('Announced addFile.')
+        self.addFile = addFile
+
+    @signal(dbus_interface=IFACE, signature='s')
+    def FileRem(self, remFile):
+        self._logger.debug('Announced remFile.')
+        self.remFile = remFile
+
+    # Methods
+    @method(dbus_interface=IFACE, in_signature='s', out_signature='')
+    def FileList(self, fileList):
+        """To be called on the incoming XO after they Hello."""
+        self._logger.debug('Somebody called FileList and sent me %s', fileList)
+        self.text_received_cb('filelist',fileList)
+
+    # Handelers
     def add_join_handler(self):
         self._logger.debug('Adding join handler.')
         # Watch for announceJoin
         self.tube.add_signal_receiver(self.announceJoin_cb, 'announceJoin', IFACE,
             path=PATH, sender_keyword='sender')
 
+    def add_file_change_handler(self):
+        self._logger.debug('Adding file change handlers.')
+
+        self.tube.add_signal_receiver(self.file_add_cb, 'FileAdd', IFACE,
+            path=PATH, sender_keyword='sender')
+
+        self.tube.add_signal_receiver(self.file_rem_cb, 'FileRem', IFACE,
+            path=PATH, sender_keyword='sender')
+
+    # Callbacks
     def announceJoin_cb(self, sender=None):
         """Somebody joined."""
         if sender == self.tube.get_unique_name():
             # sender is my bus name, so ignore my own signal
             return
-        self._logger.debug('Welcoming %s and sending them data' % sender)
+        self._logger.debug('Welcoming %s and sending them data', sender)
 
         self.tube.get_object(sender, PATH).FileList(self.getFileList(), dbus_interface=IFACE)
 
-    @method(dbus_interface=IFACE, in_signature='s', out_signature='')
-    def FileList(self, fileList):
-        """To be called on the incoming XO after they Hello."""
-        self._logger.debug('Somebody called FileList and sent me %s' % fileList)
-        self.text_received_cb('filelist',fileList)
+    def file_add_cb(self, addFile, sender=None):
+        if sender == self.tube.get_unique_name():
+            # sender is my bus name, so ignore my own signal
+            return
+        self._logger.debug('File Add Noticed')
+        self.text_received_cb('fileadd',addFile)
+
+    def file_rem_cb(self, remFile, sender=None):
+        if sender == self.tube.get_unique_name():
+            # sender is my bus name, so ignore my own signal
+            return
+        self._logger.debug('File Rem Noticed')
+        self.text_received_cb('filerem',remFile)
