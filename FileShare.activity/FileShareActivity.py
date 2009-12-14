@@ -86,7 +86,7 @@ class FileShareActivity(Activity):
 
                     # If file in share, return don't build file
                     if os.path.exists(bundle_path):
-                        self._alert(_("File Not Added"), _("File allready shaired"))
+                        self._alert(_("File Not Added"), _("File already shaired"))
                         return
 
                     journalentrybundle.from_jobject(jobject, bundle_path )
@@ -102,7 +102,7 @@ class FileShareActivity(Activity):
                         bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
                         if os.path.exists(bundle_path):
-                            self._alert(_("File Not Added"), _("File allready shaired"))
+                            self._alert(_("File Not Added"), _("File already shaired"))
                             return
 
                         journalentrybundle.from_jobject(jobject, bundle_path )
@@ -110,7 +110,7 @@ class FileShareActivity(Activity):
                     else:
                         # UNKOWN ACTIVTIY, No activity id, no file hash, just add it
                         # FIXME
-                        _logger.warn("Unknown File Data. Cann't check if file is allready shaired.")
+                        _logger.warn("Unknown File Data. Can't check if file is already shaired.")
                         objectHash = sha1(time.time()).hexdigest()
                         bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
@@ -154,7 +154,7 @@ class FileShareActivity(Activity):
             if model.get_value(iter, 6) == "":
                 self._get_document(str( model.get_value(iter, 0)))
             else:
-                self._alert(_("File has allready or is currently being downloaded"))
+                self._alert(_("File has already or is currently being downloaded"))
         else:
             self._alert(_("You must select a file to download"))
 
