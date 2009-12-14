@@ -179,9 +179,11 @@ class FileShareActivity(Activity):
                 break
             iter = model.iter_next( iter )
 
-        key = model.get_value(iter, 0)
-        del self.sharedFiles[key]
-        model.remove( iter )
+        # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
+        if model.get_value(iter, 6) == "":
+            key = model.get_value(iter, 0)
+            del self.sharedFiles[key]
+            model.remove( iter )
 
         # Notify connected users
         if self.initiating:
@@ -288,8 +290,9 @@ class FileShareActivity(Activity):
                 break
             iter = model.iter_next( iter )
 
-        model.set_value( iter, 5, progress )
-        model.set_value( iter, 6, value )
+        if iter:
+            model.set_value( iter, 5, progress )
+            model.set_value( iter, 6, value )
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
