@@ -476,9 +476,9 @@ class FileShareActivity(Activity):
         # Set status to downloaded
         self.progress_set( fileId, 100, _("Saving File"))
 
-        self._installBundle( tmp_file )
+        metadata = self._installBundle( tmp_file )
 
-        self._alert( _("File Downloaded"), bundle.get_metadata()['title'])
+        self._alert( _("File Downloaded"), metadata['title'])
         self.progress_set( fileId, 100, _("Download Complete"))
 
 
@@ -510,6 +510,7 @@ class FileShareActivity(Activity):
         _logger.debug("Saving %s to datastore...", tmp_file)
         bundle = journalentrybundle.JournalEntryBundle(tmp_file)
         bundle.install()
+        return bundle.get_metadata()
 
 
     def write_file(self, file_path):
