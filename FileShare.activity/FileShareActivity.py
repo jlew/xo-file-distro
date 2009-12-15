@@ -147,6 +147,21 @@ class FileShareActivity(Activity):
             except:
                 _logger.warn("Could not remove file from system: %d",bundle_path)
 
+    def requestInsFile(self, widget, data=None):
+        _logger.info('Requesting to install file back to journal')
+
+        if self.treeview.get_selection().count_selected_rows() != 0:
+            model, iter = self.treeview.get_selection().get_selected()
+            key = model.get_value(iter, 0)
+
+            # Attempt to remove file from system
+            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
+
+            self._installBundle( bundle_path )
+            self._alert(_("Installed bundle to Jorunal"))
+
+
+
 
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
@@ -217,6 +232,10 @@ class FileShareActivity(Activity):
             addFileButton = gtk.Button(_("Add File"))
             addFileButton.connect("clicked", self.requestAddFile, None)
             hbbox.add(addFileButton)
+
+            insFileButton = gtk.Button(_("Copy to Journal"))
+            insFileButton.connect("clicked", self.requestInsFile, None)
+            hbbox.add(insFileButton)
 
             remFileButton = gtk.Button(_("Remove Selected File"))
             remFileButton.connect("clicked", self.requestRemFile, None)
@@ -452,14 +471,13 @@ class FileShareActivity(Activity):
         return False
 
     def _download_result_cb(self, getter, tmp_file, suggested_name, fileId):
-        _logger.debug("Got document %s (%s)", tempfile, suggested_name)
+        _logger.debug("Got document %s (%s)", tmp_file, suggested_name)
 
         # Set status to downloaded
         self.progress_set( fileId, 100, _("Saving File"))
 
-        bundle = journalentrybundle.JournalEntryBundle(tmp_file)
-        _logger.debug("Saving %s to datastore...", tmp_file)
-        bundle.install()
+        self._installBundle( tmp_file )
+
         self._alert( _("File Downloaded"), bundle.get_metadata()['title'])
         self.progress_set( fileId, 100, _("Download Complete"))
 
@@ -485,6 +503,14 @@ class FileShareActivity(Activity):
         _logger.debug("Error getting document from tube. %s",  err )
         self._alert(_("Error getting document"), err)
         #gobject.idle_add(self._get_document)
+
+
+    def _installBundle(self, tmp_file):
+        """Installs a file to the journal"""
+        _logger.debug("Saving %s to datastore...", tmp_file)
+        bundle = journalentrybundle.JournalEntryBundle(tmp_file)
+        bundle.install()
+
 
     def write_file(self, file_path):
         _logger.debug('Writing activity file')
