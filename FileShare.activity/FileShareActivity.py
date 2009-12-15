@@ -45,7 +45,8 @@ class FileShareActivity(Activity):
         _logger.info("activity running")
 
         # Make a temp directory to hold all files
-        self._filepath = tempfile.mkdtemp()
+        temp_path = os.path.join(self.get_activity_root(), 'instance')
+        self._filepath = tempfile.mkdtemp(dir=temp_path)
 
         # Port the file server will do http transfers
         self.port = 1024 + (hash(self._activity_id) % 64511)
