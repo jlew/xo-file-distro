@@ -7,6 +7,7 @@ import time
 import journalentrybundle
 import dbus
 import gobject
+import zipfile
 from gettext import gettext as _
 
 from sugar.activity.activity import Activity, ActivityToolbox
@@ -488,37 +489,29 @@ class FileShareActivity(Activity):
     def write_file(self, file_path):
         _logger.debug('Writing activity file')
 
-        #save the file list
-        ##TODO: CLEAN FILE LIST IF CLIENT TO ONLY HAVE DOWNLOADED FILES
-        self.metadata['fs_file_list'] = self.getFileList()
-
         # Create zip of tmp directory
-        import zipfile
-
         file = zipfile.ZipFile(file_path, "w")
 
         try:
             for name in os.listdir(self._filepath):
                 file.write(os.path.join( self._filepath, name), name, zipfile.ZIP_DEFLATED)
+
+            file.writestr("_filelist.json", self.getFileList())
         finally:
             file.close()
 
     def read_file(self, file_path):
         logging.debug('RELOADING ACTIVITY DATA...')
 
-        # unzip file to our new tmp directory
-        # zipfile provides API that in theory would let us do this
-        # correctly by hand, but handling all the oddities of
-        # Windows/UNIX mappings, extension attributes, deprecated
-        # features, etc makes it impractical.
-        if os.spawnlp(os.P_WAIT, 'unzip', 'unzip', '-o', file_path,
-                      '-x', 'mimetype', '-d', self._filepath):
-            raise ZipExtractException
-
-        # Load back filelist
-        filelist = simplejson.loads( self.metadata['fs_file_list'] )
+        # Read file list from zip
+        zip_file = zipfile.ZipFile(file_path,'r')
+        filelist = simplejson.loads(zip_file.read("_filelist.json"))
+        namelist = zip_file.namelist()
         for key in filelist:
-            # Only add files that we have (if client when saved)
-            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
-            if os.path.exists(bundle_path):
+            fileName = '%s.xoj' % key
+            # Only extract and add files that we have (needed if client when saved)
+            if fileName in namelist:
+                bundle_path = os.path.join(self._filepath, fileName)
+                open(bundle_path, "wb").write(zip_file.read(fileName))
                 self._addFileToUIList(filelist[key])
+        zip_file.close()
