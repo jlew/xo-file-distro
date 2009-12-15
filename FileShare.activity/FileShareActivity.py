@@ -125,7 +125,8 @@ class FileShareActivity(Activity):
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
-                self._addFileToUIList( [objectHash, title, desc, tags, size, 0, ''] )
+                # Note, server sets download percent to 100 incase of opening in future as client
+                self._addFileToUIList( [objectHash, title, desc, tags, size, 100, _('Added when server')] )
 
         finally:
             chooser.destroy()
@@ -159,9 +160,6 @@ class FileShareActivity(Activity):
 
             self._installBundle( bundle_path )
             self._alert(_("Installed bundle to Jorunal"))
-
-
-
 
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
@@ -314,6 +312,8 @@ class FileShareActivity(Activity):
         if iter:
             model.set_value( iter, 5, progress )
             model.set_value( iter, 6, value )
+        self.sharedFiles[id][5] = progress
+        self.sharedFiles[id][6] = value
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
@@ -447,7 +447,13 @@ class FileShareActivity(Activity):
         if action == "filelist":
             filelist = simplejson.loads( request )
             for key in filelist:
-                self._addFileToUIList(filelist[key])
+                if not self.sharedFiles.has_key(key):
+                    #Clean last two data sets incase of client now server
+                    item = filelist[key]
+                    item[5] = 0 #0 percent downloaded
+                    item[6] = "" #No download status
+
+                    self._addFileToUIList(item)
         elif action == "fileadd":
             self._addFileToUIList( simplejson.loads( request ) )
         elif action == "filerem":
