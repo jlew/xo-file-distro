@@ -483,3 +483,41 @@ class FileShareActivity(Activity):
         _logger.debug("Error getting document from tube. %s",  err )
         self._alert(_("Error getting document"), err)
         #gobject.idle_add(self._get_document)
+
+    def write_file(self, file_path):
+        _logger.debug('Writing activity file')
+
+        #save the file list
+        ##TODO: CLEAN FILE LIST IF CLIENT TO ONLY HAVE DOWNLOADED FILES
+        self.metadata['fs_file_list'] = self.getFileList()
+
+        # Create zip of tmp directory
+        import zipfile
+
+        file = zipfile.ZipFile(file_path, "w")
+
+        try:
+            for name in os.listdir(self._filepath):
+                file.write(os.path.join( self._filepath, name), name, zipfile.ZIP_DEFLATED)
+        finally:
+            file.close()
+
+    def read_file(self, file_path):
+        logging.debug('RELOADING ACTIVITY DATA...')
+
+        # unzip file to our new tmp directory
+        # zipfile provides API that in theory would let us do this
+        # correctly by hand, but handling all the oddities of
+        # Windows/UNIX mappings, extension attributes, deprecated
+        # features, etc makes it impractical.
+        if os.spawnlp(os.P_WAIT, 'unzip', 'unzip', '-o', file_path,
+                      '-x', 'mimetype', '-d', self._filepath):
+            raise ZipExtractException
+
+        # Load back filelist
+        filelist = simplejson.loads( self.metadata['fs_file_list'] )
+        for key in filelist:
+            # Only add files that we have (if client when saved)
+            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
+            if os.path.exists(bundle_path):
+                self._addFileToUIList(filelist[key])
