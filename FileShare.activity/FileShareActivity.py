@@ -194,6 +194,7 @@ class FileShareActivity(Activity):
                 break
             iter = model.iter_next( iter )
 
+        key = model.get_value(iter, 0)
         # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
         if model.get_value(iter, 6) == "":
             key = model.get_value(iter, 0)
