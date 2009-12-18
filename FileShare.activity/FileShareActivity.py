@@ -68,6 +68,9 @@ class FileShareActivity(Activity):
         # Are we the ones that created the control tube
         self.initiating = False
 
+        # Set to true when closing for keep cleanup
+        self._close_requested = False
+
         # Build and display gui
         self._buildGui()
 
@@ -521,8 +524,34 @@ class FileShareActivity(Activity):
         return bundle.get_metadata()
 
 
+    def can_close( self ):
+        #TODO: HAVE SERVER CHECK IF IT CAN CLOSE
+        self._close_requested = True
+        return True
+
     def write_file(self, file_path):
         _logger.debug('Writing activity file')
+
+        # If no files to save, nothing to do
+        if len(self.sharedFiles) == 0:
+            return
+
+        if self._close_requested:
+            dialog = gtk.MessageDialog(self, gtk.DIALOG_MODAL,
+                    gtk.MESSAGE_INFO, gtk.BUTTONS_YES_NO,
+                    _("Saving files in activity allows the activity to resume with the current file list but takes up more space.") )
+            dialog.set_title("Do you wish to save files within activity?")
+
+            response = dialog.run()
+            dialog.destroy()
+
+            # Return not allowing files to be saved
+            if response == gtk.RESPONSE_NO:
+                #hack to empty file if existed before
+                file = zipfile.ZipFile(file_path, "w")
+                file.writestr("_filelist.json", simplejson.dumps([]))
+                file.close()
+                return
 
         # Create zip of tmp directory
         file = zipfile.ZipFile(file_path, "w")
