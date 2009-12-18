@@ -146,7 +146,7 @@ class FileShareActivity(Activity):
             try:
                 os.remove( bundle_path )
             except:
-                _logger.warn("Could not remove file from system: %d",bundle_path)
+                _logger.warn("Could not remove file from system: %s",bundle_path)
 
     def requestInsFile(self, widget, data=None):
         _logger.info('Requesting to install file back to journal')
@@ -493,7 +493,7 @@ class FileShareActivity(Activity):
     def _download_progress_cb(self, getter, bytes_downloaded, fileId):
         # FIXME: signal the expected size somehow, so we can draw a progress
         # bar
-        _logger.debug("Downloaded %u bytes for document id %d...",bytes_downloaded, fileId)
+        _logger.debug("Downloaded %u bytes for document id %s...",bytes_downloaded, fileId)
 
         fileInQuestion = self.sharedFiles[fileId]
         downloadPercent = (float(bytes_downloaded)/float(fileInQuestion[4]))*100.0
