@@ -49,6 +49,9 @@ class FileShareActivity(Activity):
         temp_path = os.path.join(self.get_activity_root(), 'instance')
         self._filepath = tempfile.mkdtemp(dir=temp_path)
 
+        # Set if they started the activity
+        self.isServer = not self._shared_activity
+
         # Port the file server will do http transfers
         self.port = 1024 + (hash(self._activity_id) % 64511)
 
@@ -62,7 +65,7 @@ class FileShareActivity(Activity):
         self.unused_download_tubes = set()
         self.addr=None
 
-        # Are we the ones creating the control tube
+        # Are we the ones that created the control tube
         self.initiating = False
 
         # Build and display gui
@@ -194,16 +197,14 @@ class FileShareActivity(Activity):
                 break
             iter = model.iter_next( iter )
 
-        key = model.get_value(iter, 0)
         # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
-        if model.get_value(iter, 6) == "":
-            key = model.get_value(iter, 0)
-            del self.sharedFiles[key]
+        if model.get_value(iter, 5) == 0 or self.isServer:
+            del self.sharedFiles[id]
             model.remove( iter )
 
         # Notify connected users
         if self.initiating:
-            self.controlTube.FileRem( simplejson.dumps(key) )
+            self.controlTube.FileRem( simplejson.dumps(id) )
 
     def getFileList(self):
         return simplejson.dumps(self.sharedFiles)
@@ -227,7 +228,7 @@ class FileShareActivity(Activity):
         ###################
         hbbox = gtk.HButtonBox()
 
-        if not self._shared_activity:
+        if self.isServer:
             addFileButton = gtk.Button(_("Add File"))
             addFileButton.connect("clicked", self.requestAddFile, None)
             hbbox.add(addFileButton)
@@ -263,7 +264,7 @@ class FileShareActivity(Activity):
         self.treeview.append_column(colSize)
 
         # Don't show progress bar if server
-        if self._shared_activity:
+        if not self.isServer:
             self.treeview.append_column(colProg)
 
         # create a CellRendererText to render the data
