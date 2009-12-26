@@ -141,8 +141,10 @@ class FileShareActivity(Activity):
     def requestRemFile(self, widget, data=None):
         """Removes file from memory then calls rem file from ui"""
         _logger.info('Requesting to delete file')
-        if self.treeview.get_selection().count_selected_rows() != 0:
-            model, iter = self.treeview.get_selection().get_selected()
+
+        model, iterlist = self.treeview.get_selection().get_selected_rows()
+        for path in iterlist:
+            iter = model.get_iter(path)
             key = model.get_value(iter, 0)
             self._remFileFromUIList(key)
 
@@ -157,8 +159,9 @@ class FileShareActivity(Activity):
     def requestInsFile(self, widget, data=None):
         _logger.info('Requesting to install file back to journal')
 
-        if self.treeview.get_selection().count_selected_rows() != 0:
-            model, iter = self.treeview.get_selection().get_selected()
+        model, iterlist = self.treeview.get_selection().get_selected_rows()
+        for path in iterlist:
+            iter = model.get_iter(path)
             key = model.get_value(iter, 0)
 
             # Attempt to remove file from system
@@ -170,12 +173,13 @@ class FileShareActivity(Activity):
     def requestDownloadFile(self, widget, data=None):
         _logger.info('Requesting to Download file')
         if self.treeview.get_selection().count_selected_rows() != 0:
-            model, iter = self.treeview.get_selection().get_selected()
-
-            if model.get_value(iter, 6) == "":
-                self._get_document(str( model.get_value(iter, 0)))
-            else:
-                self._alert(_("File has already or is currently being downloaded"))
+            model, iterlist = self.treeview.get_selection().get_selected_rows()
+            for path in iterlist:
+                iter = model.get_iter(path)
+                if model.get_value(iter, 6) == "":
+                    self._get_document(str( model.get_value(iter, 0)))
+                else:
+                    self._alert(_("File has already or is currently being downloaded"))
         else:
             self._alert(_("You must select a file to download"))
 
@@ -295,6 +299,9 @@ class FileShareActivity(Activity):
 
         # Allow sorting on the column
         colName.set_sort_column_id(1)
+
+        # Allow Multiple Selections
+        self.treeview.get_selection().set_mode( gtk.SELECTION_MULTIPLE )
 
         # Put table into scroll window to allow it to scroll
         window = gtk.ScrolledWindow()
