@@ -460,7 +460,11 @@ class FileShareActivity(Activity):
 
                     self._addFileToUIList(item)
         elif action == "fileadd":
-            self._addFileToUIList( simplejson.loads( request ) )
+            #Clean data
+            addList = simplejson.loads( request )
+            addList[5] = 0
+            addList[6] = ""
+            self._addFileToUIList( addList )
         elif action == "filerem":
             self._remFileFromUIList( simplejson.loads( request ) )
         else:
