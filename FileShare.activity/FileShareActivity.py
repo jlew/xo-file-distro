@@ -110,7 +110,7 @@ class FileShareActivity(Activity):
 
                     # If file in share, return don't build file
                     if os.path.exists(bundle_path):
-                        self._alert(_("File Not Added"), _("File already shaired"))
+                        self._alert(_("File Not Added"), _("File already shared"))
                         return
 
                     journalentrybundle.from_jobject(jobject, bundle_path )
@@ -126,7 +126,7 @@ class FileShareActivity(Activity):
                         bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
                         if os.path.exists(bundle_path):
-                            self._alert(_("File Not Added"), _("File already shaired"))
+                            self._alert(_("File Not Added"), _("File already shared"))
                             return
 
                         journalentrybundle.from_jobject(jobject, bundle_path )
@@ -134,7 +134,7 @@ class FileShareActivity(Activity):
                     else:
                         # UNKOWN ACTIVTIY, No activity id, no file hash, just add it
                         # FIXME
-                        _logger.warn("Unknown File Data. Can't check if file is already shaired.")
+                        _logger.warn("Unknown File Data. Can't check if file is already shared.")
                         objectHash = sha1(time.time()).hexdigest()
                         bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
