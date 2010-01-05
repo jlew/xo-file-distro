@@ -507,7 +507,7 @@ class FileShareActivity(Activity):
     def _download_document(self, addr, documentId):
         _logger.debug('Requesting to download document')
         bundle_path = os.path.join(self._filepath, '%s.xoj' % documentId)
-        port = int(self.addr[1])
+        port = int(addr[1])
 
         getter = network.GlibURLDownloader("http://%s:%d/%s"
                                            % (addr[0], port,documentId))
