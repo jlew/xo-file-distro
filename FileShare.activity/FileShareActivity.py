@@ -33,6 +33,7 @@ from sugar.presence.tubeconn import TubeConnection
 from sugar import network
 
 from TubeSpeak import TubeSpeak
+import FileInfo
 from hashlib import sha1
 
 import logging
@@ -147,8 +148,9 @@ class FileShareActivity(Activity):
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
                 size = os.path.getsize( bundle_path )
 
-                # Note, server sets download percent to 100 incase of opening in future as client
-                self._addFileToUIList( [objectHash, title, desc, tags, size, 100, _('Added when server')] )
+                #File Info Block
+                fi = FileInfo.FileInfo(objectHash, title, desc, tags, size, True)
+                self._addFileToUIList( objectHash, fi )
 
         finally:
             chooser.destroy()
@@ -192,7 +194,8 @@ class FileShareActivity(Activity):
             model, iterlist = self.treeview.get_selection().get_selected_rows()
             for path in iterlist:
                 iter = model.get_iter(path)
-                if model.get_value(iter, 6) == "":
+                fi = model.get_value(iter, 1)
+                if fi.aquired == 0:
                     self._get_document(str( model.get_value(iter, 0)))
                 else:
                     self._alert(_("File has already or is currently being downloaded"))
@@ -200,15 +203,15 @@ class FileShareActivity(Activity):
             self._alert(_("You must select a file to download"))
 
 
-    def _addFileToUIList(self, listDict):
-        self.sharedFiles[listDict[0]] = listDict
+    def _addFileToUIList(self, fileid, fileinfo):
+        self.sharedFiles[fileid] = fileinfo
         modle = self.treeview.get_model()
 
-        modle.append( None, listDict )
+        modle.append( None, [fileid, fileinfo])
 
         # Notify connected users
         if self.initiating:
-                self.controlTube.FileAdd( simplejson.dumps(listDict) )
+                self.controlTube.FileAdd( simplejson.dumps(fileinfo.share_dump()) )
 
     def _remFileFromUIList(self, id):
         _logger.info('Requesting to delete file')
@@ -221,7 +224,7 @@ class FileShareActivity(Activity):
             iter = model.iter_next( iter )
 
         # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
-        if model.get_value(iter, 5) == 0 or self.isServer:
+        if model.get_value(iter, 1).aquired == 0 or self.isServer:
             del self.sharedFiles[id]
             model.remove( iter )
 
@@ -230,7 +233,10 @@ class FileShareActivity(Activity):
             self.controlTube.FileRem( simplejson.dumps(id) )
 
     def getFileList(self):
-        return simplejson.dumps(self.sharedFiles)
+        ret = {}
+        for key in self.sharedFiles:
+            ret[key] = self.sharedFiles[key].share_dump()
+        return simplejson.dumps(ret)
 
     def filePathBuilder(self, path):
         if self.sharedFiles.has_key( path[1:] ):
@@ -272,7 +278,7 @@ class FileShareActivity(Activity):
         # Create File Tree
         ##################
         table = gtk.Table(rows=10, columns=1, homogeneous=False)
-        self.treeview = gtk.TreeView(gtk.TreeStore(str,str,str,str,int,int,str))
+        self.treeview = gtk.TreeView(gtk.TreeStore(str,object))
 
         # create the TreeViewColumn to display the data
         colName = gtk.TreeViewColumn(_('File Name'))
@@ -285,10 +291,7 @@ class FileShareActivity(Activity):
         self.treeview.append_column(colDesc)
         self.treeview.append_column(colTags)
         self.treeview.append_column(colSize)
-
-        # Don't show progress bar if server
-        if not self.isServer:
-            self.treeview.append_column(colProg)
+        self.treeview.append_column(colProg)
 
         # create a CellRendererText to render the data
         cell = gtk.CellRendererText()
@@ -303,12 +306,11 @@ class FileShareActivity(Activity):
 
         # set the cell "text" attribute- retrieve text
         # from that column in treestore
-        colName.add_attribute(cell, 'text', 1)
-        colDesc.add_attribute(cell, 'text', 2)
-        colTags.add_attribute(cell, 'text', 3)
-        colSize.add_attribute(cell, 'text', 4)
-        colProg.add_attribute(pbar, 'text', 6)
-        colProg.add_attribute(pbar, 'value', 5)
+        colName.set_cell_data_func(cell, FileInfo.file_name)
+        colDesc.set_cell_data_func(cell, FileInfo.file_desc)
+        colTags.set_cell_data_func(cell, FileInfo.file_tags)
+        colSize.set_cell_data_func(cell, FileInfo.file_size)
+        colProg.set_cell_data_func(pbar, FileInfo.load_bar)
 
         # make it searchable
         self.treeview.set_search_column(1)
@@ -329,7 +331,7 @@ class FileShareActivity(Activity):
         self.set_canvas(table)
         self.show_all()
 
-    def progress_set(self, id, progress, value ):
+    def update_progress(self, id, bytes ):
         model = self.treeview.get_model()
         iter = model.get_iter_first()
         while iter:
@@ -338,10 +340,25 @@ class FileShareActivity(Activity):
             iter = model.iter_next( iter )
 
         if iter:
-            model.set_value( iter, 5, progress )
-            model.set_value( iter, 6, value )
-        self.sharedFiles[id][5] = progress
-        self.sharedFiles[id][6] = value
+            obj = model.get_value( iter, 1 )
+            obj.update_aquired( bytes )
+            model.set_value( iter, 1, obj)
+
+            model.row_changed(model.get_path(iter), iter)
+
+    def set_installed( self, id ):
+        model = self.treeview.get_model()
+        iter = model.get_iter_first()
+        while iter:
+            if model.get_value( iter, 0 ) == id:
+                break
+            iter = model.iter_next( iter )
+
+        if iter:
+            obj = model.get_value( iter, 1 )
+            obj.set_installed()
+            model.set_value( iter, 1, obj)
+            modle.row_changed(model.get_path(iter), iter)
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
@@ -476,18 +493,12 @@ class FileShareActivity(Activity):
             filelist = simplejson.loads( request )
             for key in filelist:
                 if not self.sharedFiles.has_key(key):
-                    #Clean last two data sets incase of client now server
-                    item = filelist[key]
-                    item[5] = 0 #0 percent downloaded
-                    item[6] = "" #No download status
-
-                    self._addFileToUIList(item)
+                    fi = FileInfo.share_load(filelist[key])
+                    self._addFileToUIList(fi.id, fi)
         elif action == "fileadd":
-            #Clean data
             addList = simplejson.loads( request )
-            addList[5] = 0
-            addList[6] = ""
-            self._addFileToUIList( addList )
+            fi = FileInfo.share_load( addList )
+            self._addFileToUIList( fi.id, fi )
         elif action == "filerem":
             self._remFileFromUIList( simplejson.loads( request ) )
         else:
@@ -511,26 +522,13 @@ class FileShareActivity(Activity):
     def _download_result_cb(self, getter, tmp_file, suggested_name, fileId):
         _logger.debug("Got document %s (%s)", tmp_file, suggested_name)
 
-        # Set status to downloaded
-        self.progress_set( fileId, 100, _("Saving File"))
-
         metadata = self._installBundle( tmp_file )
 
         self._alert( _("File Downloaded"), metadata['title'])
-        self.progress_set( fileId, 100, _("Download Complete"))
-
-
+        self.set_installed( fileId )
 
     def _download_progress_cb(self, getter, bytes_downloaded, fileId):
-        # FIXME: signal the expected size somehow, so we can draw a progress
-        # bar
-        _logger.debug("Downloaded %u bytes for document id %s...",bytes_downloaded, fileId)
-
-        fileInQuestion = self.sharedFiles[fileId]
-        downloadPercent = (float(bytes_downloaded)/float(fileInQuestion[4]))*100.0
-
-        self.progress_set( fileId, downloadPercent,
-            "%s %d%% (%d %s)"%(_("Downloading"), downloadPercent, bytes_downloaded, _("bytes")))
+        self.update_progress( fileId, bytes_downloaded )
 
         # Force gui to update if there are actions pending
         # Fixes bug where system appears to hang on FAST connections
@@ -604,5 +602,8 @@ class FileShareActivity(Activity):
             if fileName in namelist:
                 bundle_path = os.path.join(self._filepath, fileName)
                 open(bundle_path, "wb").write(zip_file.read(fileName))
-                self._addFileToUIList(filelist[key])
+
+                fi = FileInfo.share_load(filelist[key], True)
+                self._addFileToUIList(fi.id, fi)
+
         zip_file.close()
