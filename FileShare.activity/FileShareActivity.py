@@ -361,7 +361,7 @@ class FileShareActivity(Activity):
             else:
                 obj.set_failed()
             model.set_value( iter, 1, obj)
-            modle.row_changed(model.get_path(iter), iter)
+            model.row_changed(model.get_path(iter), iter)
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
