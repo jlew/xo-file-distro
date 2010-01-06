@@ -346,7 +346,7 @@ class FileShareActivity(Activity):
 
             model.row_changed(model.get_path(iter), iter)
 
-    def set_installed( self, id ):
+    def set_installed( self, id, sucessful=True ):
         model = self.treeview.get_model()
         iter = model.get_iter_first()
         while iter:
@@ -356,7 +356,10 @@ class FileShareActivity(Activity):
 
         if iter:
             obj = model.get_value( iter, 1 )
-            obj.set_installed()
+            if sucessful:
+                obj.set_installed()
+            else:
+                obj.set_failed()
             model.set_value( iter, 1, obj)
             modle.row_changed(model.get_path(iter), iter)
 
@@ -522,10 +525,13 @@ class FileShareActivity(Activity):
     def _download_result_cb(self, getter, tmp_file, suggested_name, fileId):
         _logger.debug("Got document %s (%s)", tmp_file, suggested_name)
 
-        metadata = self._installBundle( tmp_file )
-
-        self._alert( _("File Downloaded"), metadata['title'])
-        self.set_installed( fileId )
+        try:
+            metadata = self._installBundle( tmp_file )
+            self._alert( _("File Downloaded"), metadata['title'])
+            self.set_installed( fileId )
+        except:
+            self._alert( _("File Download Failed") )
+            self.set_installed( fileId, False )
 
     def _download_progress_cb(self, getter, bytes_downloaded, fileId):
         self.update_progress( fileId, bytes_downloaded )

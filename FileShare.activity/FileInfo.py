@@ -54,6 +54,11 @@ class FileInfo(object):
         self.aquired = self.size
         self.installed = True
 
+    def set_failed(self):
+        self.status = _("Download Failed")
+        self.aquired = 0
+        self.installed = False
+
     def share_dump(self):
         return [self.id, self.title, self.desc, self.tags, self.size]
 
