@@ -1,2 +1,4 @@
 encoding: UTF-8
 FileShareActivity.py
+FileInfo.py
+GuiView.py

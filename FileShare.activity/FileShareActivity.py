@@ -31,10 +31,15 @@ from sugar.graphics.objectchooser import ObjectChooser
 from sugar.graphics.alert import NotifyAlert
 from sugar.presence.tubeconn import TubeConnection
 from sugar import network
+from sugar import profile
 
+from GuiView import GuiView
 from TubeSpeak import TubeSpeak
 import FileInfo
 from hashlib import sha1
+
+import urllib, urllib2, MultipartPostHandler, httplib
+import threading
 
 import logging
 _logger = logging.getLogger('fileshare-activity')
@@ -57,6 +62,7 @@ class FileShareActivity(Activity):
     def __init__(self, handle):
         Activity.__init__(self, handle)
         #wait a moment so that our debug console capture mistakes
+        gobject.threads_init()
         gobject.idle_add( self._doInit, None )
 
     def _doInit(self, handle):
@@ -88,13 +94,89 @@ class FileShareActivity(Activity):
         # Set to true when closing for keep cleanup
         self._close_requested = False
 
+        # If they are the server, ask them if they want to be the server and use
+        # P2P share system or if they want to do a client/server with an
+        # external server
+
+        self._mode = "P2P"
+        prof = profile.get_profile()
+
+        jabber_serv = None
+        #Need to check if on 82 or higher
+        if hasattr(profile, 'jabber_server'):
+            jabber_serv = profile.jabber_server
+        else:
+            #Higher, everything was moved to gconf
+            import gconf
+            client = gconf.client_get_default()
+            jabber_serv = client.get_string("/desktop/sugar/collaboration/jabber_server")
+
+        if jabber_serv:
+            self.server_ip = jabber_serv
+            self.server_port= 14623
+
+            if self.isServer and self.check_for_server() and self._server_mode():
+                self._mode = "SERVER"
+                self.isServer = False
+
         # Build and display gui
         self._buildGui()
 
-        # Connect to shared and join calls
-        self.connect('shared', self._shared_cb)
-        self.connect('joined', self._joined_cb)
+        if self._mode == 'P2P':
+            # Connect to shared and join calls
+            self.connect('shared', self._shared_cb)
+            self.connect('joined', self._joined_cb)
 
+        else:
+            #IN SERVER MODE, GET SERVER FILE LIST
+            def call():
+                conn = httplib.HTTPConnection( self.server_ip, self.server_port)
+                conn.request("GET", "/filelist")
+                r1 = conn.getresponse()
+                if r1.status == 200:
+                    data = r1.read()
+                    conn.close()
+                    self.incomingRequest('filelist',data)
+                else:
+                    self._alert("Error getting file list")
+                self.show_throbber(False)
+
+            self.show_throbber(True, _("Please Wait... Requesting file list from server"))
+            threading.Thread(target=call).start()
+
+    def check_for_server(self):
+        s_version = None
+        try:
+            conn = httplib.HTTPConnection( self.server_ip, self.server_port)
+            conn.request("GET", "/version")
+            r1 = conn.getresponse()
+            if r1.status == 200:
+                s_version= r1.read()
+                conn.close()
+                return s_version
+            else:
+                return False
+        except:
+            return False
+
+
+    def show_throbber(self, show, mesg=""):
+        if show:
+            #Build Throbber
+            throbber = gtk.VBox()
+            img = gtk.Image()
+            img.set_from_file('throbber.gif')
+            throbber.pack_start(img)
+            throbber.pack_start(gtk.Label(mesg))
+
+            self.set_canvas(throbber)
+            self.show_all()
+        else:
+            self.set_canvas(self.disp)
+            self.show_all()
+
+        while gtk.events_pending():
+            gtk.main_iteration()
 
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
@@ -105,6 +187,8 @@ class FileShareActivity(Activity):
                 # get object and build file
                 jobject = chooser.get_selected_object()
 
+                self.show_throbber(True, _("Please Wait... Packaging File") )
+
                 if jobject.metadata.has_key("activity_id") and str(jobject.metadata['activity_id']):
                     objectHash = str(jobject.metadata['activity_id'])
                     bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
@@ -112,6 +196,7 @@ class FileShareActivity(Activity):
                     # If file in share, return don't build file
                     if os.path.exists(bundle_path):
                         self._alert(_("File Not Added"), _("File already shared"))
+                        self.show_throbber( False )
                         return
 
                     journalentrybundle.from_jobject(jobject, bundle_path )
@@ -128,6 +213,7 @@ class FileShareActivity(Activity):
 
                         if os.path.exists(bundle_path):
                             self._alert(_("File Not Added"), _("File already shared"))
+                            self.show_throbber( False )
                             return
 
                         journalentrybundle.from_jobject(jobject, bundle_path )
@@ -140,9 +226,8 @@ class FileShareActivity(Activity):
                         bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
                         journalentrybundle.from_jobject(jobject, bundle_path )
-                        return
 
-                # Build file array
+                # Build file information
                 desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
                 title = _("Untitled") if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
                 tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
@@ -151,6 +236,25 @@ class FileShareActivity(Activity):
                 #File Info Block
                 fi = FileInfo.FileInfo(objectHash, title, desc, tags, size, True)
                 self._addFileToUIList( objectHash, fi )
+
+                # If added by upload button, data will have upload key
+                if data and data.has_key('upload'):
+                    def call():
+                        params = { 'jdata': simplejson.dumps(fi.share_dump()),
+                                'file':  open(bundle_path, 'rb')
+                                }
+                        opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+                        try:
+                            opener.open("http://%s:%d/upload"%(self.server_ip, self.server_port), params)
+                        except:
+                            self._alert( _("Failed to upload file") )
+                            _remFileFromUIList( objectHash )
+                            os.remove( bundle_path )
+                        self.show_throbber( False )
+                    self.show_throbber(True, _("Please Wait... Uploading file to server"))
+                    threading.Thread(target=call).start()
+                else:
+                    self.show_throbber( False )
 
         finally:
             chooser.destroy()
@@ -165,6 +269,21 @@ class FileShareActivity(Activity):
             iter = model.get_iter(path)
             key = model.get_value(iter, 0)
             self._remFileFromUIList(key)
+
+            # If added by rem from server button, data will have remove key
+            if data and data.has_key('remove'):
+                def call():
+                    params =  { 'id': key }
+
+                    try:
+                        opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+                        opener.open("http://%s:%d/remove"%(self.server_ip, self.server_port), params)
+                    except:
+                        self._alert( _("Failed to send remove request to server") )
+                    self.show_throbber( False )
+
+                self.show_throbber(True, _("Please Wait... Sending request to server"))
+                threading.Thread(target=call).start()
 
             # Attempt to remove file from system
             bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
@@ -196,7 +315,10 @@ class FileShareActivity(Activity):
                 iter = model.get_iter(path)
                 fi = model.get_value(iter, 1)
                 if fi.aquired == 0:
-                    self._get_document(str( model.get_value(iter, 0)))
+                    if self._mode == 'SERVER':
+                        self._server_download_document( str( model.get_value(iter, 0)) )
+                    else:
+                        self._get_document(str( model.get_value(iter, 0)))
                 else:
                     self._alert(_("File has already or is currently being downloaded"))
         else:
@@ -244,6 +366,22 @@ class FileShareActivity(Activity):
         else:
             _logger.debug("INVALID PATH",path[1:])
 
+    def _server_mode(self):
+        dialog = gtk.Dialog(_("Please Select Share Mode"), self, 0,
+            (_("Share with others"), gtk.RESPONSE_CANCEL, _("Connect to Server"), gtk.RESPONSE_OK))
+
+        dialog.vbox.pack_start(gtk.Label(_("Share with others or connect to server?")), False, False, 0)
+
+        dialog.show_all()
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == gtk.RESPONSE_OK:
+            return True
+        else:
+            return False
+
+
     def _buildGui(self):
         self.set_title('File Share')
 
@@ -253,82 +391,8 @@ class FileShareActivity(Activity):
         self.set_toolbox(toolbox)
         toolbox.show()
 
-        # Create button bar
-        ###################
-        hbbox = gtk.HButtonBox()
-
-        if self.isServer:
-            addFileButton = gtk.Button(_("Add File"))
-            addFileButton.connect("clicked", self.requestAddFile, None)
-            hbbox.add(addFileButton)
-
-            insFileButton = gtk.Button(_("Copy to Journal"))
-            insFileButton.connect("clicked", self.requestInsFile, None)
-            hbbox.add(insFileButton)
-
-            remFileButton = gtk.Button(_("Remove Selected File"))
-            remFileButton.connect("clicked", self.requestRemFile, None)
-            hbbox.add(remFileButton)
-
-        else:
-            downloadFileButton = gtk.Button(_("Download File"))
-            downloadFileButton.connect("clicked", self.requestDownloadFile, None)
-            hbbox.add(downloadFileButton)
-
-        # Create File Tree
-        ##################
-        table = gtk.Table(rows=10, columns=1, homogeneous=False)
-        self.treeview = gtk.TreeView(gtk.TreeStore(str,object))
-
-        # create the TreeViewColumn to display the data
-        colName = gtk.TreeViewColumn(_('File Name'))
-        colDesc = gtk.TreeViewColumn(_('Description'))
-        colTags = gtk.TreeViewColumn(_('Tags'))
-        colSize = gtk.TreeViewColumn(_('File Size'))
-        colProg = gtk.TreeViewColumn('')
-
-        self.treeview.append_column(colName)
-        self.treeview.append_column(colDesc)
-        self.treeview.append_column(colTags)
-        self.treeview.append_column(colSize)
-        self.treeview.append_column(colProg)
-
-        # create a CellRendererText to render the data
-        cell = gtk.CellRendererText()
-        pbar = gtk.CellRendererProgress()
-
-        # add the cell to the tvcolumn and allow it to expand
-        colName.pack_start(cell, True)
-        colDesc.pack_start(cell, True)
-        colTags.pack_start(cell, True)
-        colSize.pack_start(cell, True)
-        colProg.pack_start(pbar, True)
-
-        # set the cell "text" attribute- retrieve text
-        # from that column in treestore
-        colName.set_cell_data_func(cell, FileInfo.file_name)
-        colDesc.set_cell_data_func(cell, FileInfo.file_desc)
-        colTags.set_cell_data_func(cell, FileInfo.file_tags)
-        colSize.set_cell_data_func(cell, FileInfo.file_size)
-        colProg.set_cell_data_func(pbar, FileInfo.load_bar)
-
-        # make it searchable
-        self.treeview.set_search_column(1)
-
-        # Allow sorting on the column
-        colName.set_sort_column_id(1)
-
-        # Allow Multiple Selections
-        self.treeview.get_selection().set_mode( gtk.SELECTION_MULTIPLE )
-
-        # Put table into scroll window to allow it to scroll
-        window = gtk.ScrolledWindow()
-        window.add_with_viewport(self.treeview)
-
-        table.attach(hbbox,0,1,0,1)
-        table.attach(window,0,1,1,10)
-
-        self.set_canvas(table)
+        self.disp = GuiView(self)
+        self.set_canvas(self.disp)
         self.show_all()
 
     def update_progress(self, id, bytes ):
@@ -423,6 +487,13 @@ class FileShareActivity(Activity):
                 ('127.0.0.1', dbus.UInt16(self.port)),
                 telepathy.SOCKET_ACCESS_CONTROL_LOCALHOST, 0)
 
+    def _server_download_document( self, fileId ):
+        addr = [self.server_ip, self.server_port]
+        # Download the file at next avaialbe time.
+        gobject.idle_add(self._download_document, addr, fileId)
+        return False
+
+
     def _get_document(self,fileId):
         if not self.addr:
             try:
@@ -512,8 +583,7 @@ class FileShareActivity(Activity):
         bundle_path = os.path.join(self._filepath, '%s.xoj' % documentId)
         port = int(addr[1])
 
-        getter = network.GlibURLDownloader("http://%s:%d/%s"
-                                           % (addr[0], port,documentId))
+        getter = network.GlibURLDownloader("http://%s:%d/%s" % (addr[0], port,documentId))
         getter.connect("finished", self._download_result_cb, documentId)
         getter.connect("progress", self._download_progress_cb, documentId)
         getter.connect("error", self._download_error_cb, documentId)
