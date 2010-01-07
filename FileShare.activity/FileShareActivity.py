@@ -130,14 +130,17 @@ class FileShareActivity(Activity):
         else:
             #IN SERVER MODE, GET SERVER FILE LIST
             def call():
-                conn = httplib.HTTPConnection( self.server_ip, self.server_port)
-                conn.request("GET", "/filelist")
-                r1 = conn.getresponse()
-                if r1.status == 200:
-                    data = r1.read()
-                    conn.close()
-                    self.incomingRequest('filelist',data)
-                else:
+                try:
+                    conn = httplib.HTTPConnection( self.server_ip, self.server_port)
+                    conn.request("GET", "/filelist")
+                    r1 = conn.getresponse()
+                    if r1.status == 200:
+                        data = r1.read()
+                        conn.close()
+                        self.incomingRequest('filelist',data)
+                    else:
+                        self._alert("Error getting file list")
+                except:
                     self._alert("Error getting file list")
                 self.show_throbber(False)
 
