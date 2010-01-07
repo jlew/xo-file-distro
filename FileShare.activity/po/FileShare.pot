@@ -1,3 +1,183 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2010-01-07 20:28+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
 #: activity/activity.info:2
 msgid "FileShare"
+msgstr ""
+
+#: GuiView.py:35
+msgid "Add File"
+msgstr ""
+
+#: GuiView.py:39
+msgid "Copy to Journal"
+msgstr ""
+
+#: GuiView.py:43
+msgid "Remove Selected File"
+msgstr ""
+
+#: GuiView.py:49
+msgid "Upload A File"
+msgstr ""
+
+#: GuiView.py:53
+msgid "Remove From Server"
+msgstr ""
+
+#: GuiView.py:59
+msgid "Download File"
+msgstr ""
+
+#: GuiView.py:68
+msgid "File Name"
+msgstr ""
+
+#: GuiView.py:69
+msgid "Description"
+msgstr ""
+
+#: GuiView.py:70
+msgid "Tags"
+msgstr ""
+
+#: GuiView.py:71
+msgid "File Size"
+msgstr ""
+
+#: FileInfo.py:32
+msgid "File Shared"
+msgstr ""
+
+#: FileInfo.py:36
+msgid "Pending"
+msgstr ""
+
+#: FileInfo.py:48
+msgid "File Downloaded, Installing..."
+msgstr ""
+
+#: FileInfo.py:50
+msgid "Downloading"
+msgstr ""
+
+#: FileInfo.py:50
+msgid "bytes"
+msgstr ""
+
+#: FileInfo.py:53
+msgid "Download Complete"
+msgstr ""
+
+#: FileInfo.py:58
+msgid "Download Failed"
+msgstr ""
+
+#: FileShareActivity.py:144
+msgid "Please Wait... Requesting file list from server"
+msgstr ""
+
+#: FileShareActivity.py:190
+msgid "Please Wait... Packaging File"
+msgstr ""
+
+#: FileShareActivity.py:198 FileShareActivity.py:215
+msgid "File Not Added"
+msgstr ""
+
+#: FileShareActivity.py:198 FileShareActivity.py:215
+msgid "File already shared"
+msgstr ""
+
+#: FileShareActivity.py:232
+msgid "Untitled"
+msgstr ""
+
+#: FileShareActivity.py:250
+msgid "Failed to upload file"
+msgstr ""
+
+#: FileShareActivity.py:254
+msgid "Please Wait... Uploading file to server"
+msgstr ""
+
+#: FileShareActivity.py:282
+msgid "Failed to send remove request to server"
+msgstr ""
+
+#: FileShareActivity.py:285
+msgid "Please Wait... Sending request to server"
+msgstr ""
+
+#: FileShareActivity.py:308
+msgid "Installed bundle to Jorunal"
+msgstr ""
+
+#: FileShareActivity.py:323
+msgid "File has already or is currently being downloaded"
+msgstr ""
+
+#: FileShareActivity.py:325
+msgid "You must select a file to download"
+msgstr ""
+
+#: FileShareActivity.py:370
+msgid "Please Select Share Mode"
+msgstr ""
+
+#: FileShareActivity.py:371
+msgid "Share with others"
+msgstr ""
+
+#: FileShareActivity.py:371
+msgid "Connect to Server"
+msgstr ""
+
+#: FileShareActivity.py:373
+msgid "Share with others or connect to server?"
+msgstr ""
+
+#: FileShareActivity.py:503
+msgid "All tubes are busy, file download cannot start"
+msgstr ""
+
+#: FileShareActivity.py:503
+msgid "Please wait and try again"
+msgstr ""
+
+#: FileShareActivity.py:591
+msgid "Starting file download"
+msgstr ""
+
+#: FileShareActivity.py:600
+msgid "File Downloaded"
+msgstr ""
+
+#: FileShareActivity.py:603
+msgid "File Download Failed"
+msgstr ""
+
+#: FileShareActivity.py:616
+msgid "Error getting document"
+msgstr ""
+
+#: FileShareActivity.py:643
+msgid ""
+"Saving files in activity allows the activity to resume with the current file "
+"list but takes up more space."
 msgstr ""
