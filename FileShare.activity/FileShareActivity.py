@@ -103,8 +103,8 @@ class FileShareActivity(Activity):
 
         jabber_serv = None
         #Need to check if on 82 or higher
-        if hasattr(profile, 'jabber_server'):
-            jabber_serv = profile.jabber_server
+        if hasattr(prof, 'jabber_server'):
+            jabber_serv = prof.jabber_server
         else:
             #Higher, everything was moved to gconf
             import gconf
@@ -346,7 +346,7 @@ class FileShareActivity(Activity):
             iter = model.iter_next( iter )
 
         # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
-        if model.get_value(iter, 1).aquired == 0 or self.isServer:
+        if model.get_value(iter, 1).aquired == 0 or self.isServer or self._mode=="SERVER":
             del self.sharedFiles[id]
             model.remove( iter )
 
