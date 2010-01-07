@@ -1,1 +1,7 @@
-Initial Commit
+FileShare.activity
+	An activity for the xo to allow sharing of journal entires.
+	
+FileShare.server
+	A simple proof-of-concept server code to provide simple sharing.
+	This is only needed if you want to be able to share with a server
+	instead of a P2P system.
