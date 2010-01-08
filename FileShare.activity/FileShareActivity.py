@@ -409,6 +409,9 @@ class FileShareActivity(Activity):
         if iter:
             obj = model.get_value( iter, 1 )
             obj.update_aquired( bytes )
+
+            # Store updated versoin of the object
+            self.sharedFiles[id] = obj
             model.set_value( iter, 1, obj)
 
             model.row_changed(model.get_path(iter), iter)
@@ -427,6 +430,9 @@ class FileShareActivity(Activity):
                 obj.set_installed()
             else:
                 obj.set_failed()
+
+            # Store updated versoin of the object
+            self.sharedFiles[id] = obj
             model.set_value( iter, 1, obj)
             model.row_changed(model.get_path(iter), iter)
 
@@ -653,7 +659,7 @@ class FileShareActivity(Activity):
             if response == gtk.RESPONSE_NO:
                 #hack to empty file if existed before
                 file = zipfile.ZipFile(file_path, "w")
-                file.writestr("_filelist.json", simplejson.dumps([]))
+                file.writestr("_filelist.json", simplejson.dumps({}))
                 file.close()
                 return
 
