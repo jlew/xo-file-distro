@@ -27,13 +27,13 @@ import zipfile
 from gettext import gettext as _
 
 from sugar.activity.activity import Activity, ActivityToolbox
-from sugar.graphics.objectchooser import ObjectChooser
-from sugar.graphics.alert import NotifyAlert
 from sugar.presence.tubeconn import TubeConnection
 from sugar import network
 from sugar import profile
 
 from GuiView import GuiView
+from MyExceptions import InShareException, FileUploadFailure, ServerRequestFailure, NoFreeTubes
+
 from TubeSpeak import TubeSpeak
 import FileInfo
 from hashlib import sha1
@@ -139,12 +139,12 @@ class FileShareActivity(Activity):
                         conn.close()
                         self.incomingRequest('filelist',data)
                     else:
-                        self._alert("Error getting file list")
+                        self.disp.guiHandler._alert("Error getting file list")
                 except:
-                    self._alert("Error getting file list")
-                self.show_throbber(False)
+                    self.disp.guiHandler._alert("Error getting file list")
+                self.disp.guiHandler.show_throbber(False)
 
-            self.show_throbber(True, _("Please Wait... Requesting file list from server"))
+            self.disp.guiHandler.show_throbber(True, _("Please Wait... Requesting file list from server"))
             threading.Thread(target=call).start()
 
     def check_for_server(self):
@@ -163,199 +163,96 @@ class FileShareActivity(Activity):
             return False
 
 
-    def show_throbber(self, show, mesg=""):
-        if show:
-            #Build Throbber
-            throbber = gtk.VBox()
-            img = gtk.Image()
-            img.set_from_file('throbber.gif')
-            throbber.pack_start(img)
-            throbber.pack_start(gtk.Label(mesg))
+    def build_file(self, jobject):
+        #If object has activity id and it is filled in, use that as hash
+        if jobject.metadata.has_key("activity_id") and str(jobject.metadata['activity_id']):
+            objectHash = str(jobject.metadata['activity_id'])
+            bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
-            self.set_canvas(throbber)
-            self.show_all()
+            # If file in share, return don't build file
+            if os.path.exists(bundle_path):
+                raise InShareException()
+
         else:
-            self.set_canvas(self.disp)
-            self.show_all()
+            # Unknown activity id, must be a file
+            if jobject.get_file_path():
+                # FIXME: This just checks the file hash should check for
+                # identity by compairing metadata, but this will work for now
+                # Problems are that if you have one file multiple times it will
+                # only allow one copy of that file regardless of the metadata
+                objectHash = sha1(open(jobject.get_file_path() ,'rb').read()).hexdigest()
+                bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
-        while gtk.events_pending():
-            gtk.main_iteration()
+                if os.path.exists(bundle_path):
+                    raise InShareException()
 
-    def requestAddFile(self, widget, data=None):
-        _logger.info('Requesting to add file')
+            else:
+                # UNKOWN ACTIVTIY, No activity id, no file hash, just add it
+                # FIXME
+                _logger.warn("Unknown File Data. Can't check if file is already shared.")
+                objectHash = sha1(time.time()).hexdigest()
+                bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
 
-        chooser = ObjectChooser()
+        journalentrybundle.from_jobject(jobject, bundle_path )
+
+        # Build file information
+        desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
+        title = _("Untitled") if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
+        tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
+        size = os.path.getsize( bundle_path )
+
+        #File Info Block
+        return FileInfo.FileInfo(objectHash, title, desc, tags, size, True)
+
+    def send_file_to_server(self, id, file_info):
+        bundle_path = os.path.join(self._filepath, '%s.xoj' % id)
+        params = { 'jdata': simplejson.dumps(file_info.share_dump()),
+                    'file':  open(bundle_path, 'rb')
+                }
         try:
-            if chooser.run() == gtk.RESPONSE_ACCEPT:
-                # get object and build file
-                jobject = chooser.get_selected_object()
+            opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+            opener.open("http://%s:%d/upload"%(self.server_ip, self.server_port), params)
+        except:
+            raise FileUploadFailure()
 
-                self.show_throbber(True, _("Please Wait... Packaging File") )
-
-                if jobject.metadata.has_key("activity_id") and str(jobject.metadata['activity_id']):
-                    objectHash = str(jobject.metadata['activity_id'])
-                    bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
-
-                    # If file in share, return don't build file
-                    if os.path.exists(bundle_path):
-                        self._alert(_("File Not Added"), _("File already shared"))
-                        self.show_throbber( False )
-                        return
-
-                    journalentrybundle.from_jobject(jobject, bundle_path )
-
-                else:
-                    # Unknown activity id, must be a file
-                    if jobject.get_file_path():
-                        # FIXME: This just checks the file hash should check for
-                        # identity by compairing metadata, but this will work for now
-                        # Problems are that if you have one file multiple times it will
-                        # only allow one copy of that file regardless of the metadata
-                        objectHash = sha1(open(jobject.get_file_path() ,'rb').read()).hexdigest()
-                        bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
-
-                        if os.path.exists(bundle_path):
-                            self._alert(_("File Not Added"), _("File already shared"))
-                            self.show_throbber( False )
-                            return
-
-                        journalentrybundle.from_jobject(jobject, bundle_path )
-
-                    else:
-                        # UNKOWN ACTIVTIY, No activity id, no file hash, just add it
-                        # FIXME
-                        _logger.warn("Unknown File Data. Can't check if file is already shared.")
-                        objectHash = sha1(time.time()).hexdigest()
-                        bundle_path = os.path.join(self._filepath, '%s.xoj' % objectHash)
-
-                        journalentrybundle.from_jobject(jobject, bundle_path )
-
-                # Build file information
-                desc =  "" if not jobject.metadata.has_key('description') else str( jobject.metadata['description'] )
-                title = _("Untitled") if str(jobject.metadata['title']) == "" else str(jobject.metadata['title'])
-                tags = "" if not jobject.metadata.has_key('tags') else str( jobject.metadata['tags'] )
-                size = os.path.getsize( bundle_path )
-
-                #File Info Block
-                fi = FileInfo.FileInfo(objectHash, title, desc, tags, size, True)
-                self._addFileToUIList( objectHash, fi )
-
-                # If added by upload button, data will have upload key
-                if data and data.has_key('upload'):
-                    def call():
-                        params = { 'jdata': simplejson.dumps(fi.share_dump()),
-                                'file':  open(bundle_path, 'rb')
-                                }
-                        opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
-                        try:
-                            opener.open("http://%s:%d/upload"%(self.server_ip, self.server_port), params)
-                        except:
-                            self._alert( _("Failed to upload file") )
-                            _remFileFromUIList( objectHash )
-                            os.remove( bundle_path )
-                        self.show_throbber( False )
-                    self.show_throbber(True, _("Please Wait... Uploading file to server"))
-                    threading.Thread(target=call).start()
-                else:
-                    self.show_throbber( False )
-
-        finally:
-            chooser.destroy()
-            del chooser
-
-    def requestRemFile(self, widget, data=None):
-        """Removes file from memory then calls rem file from ui"""
-        _logger.info('Requesting to delete file')
-
-        model, iterlist = self.treeview.get_selection().get_selected_rows()
-        for path in iterlist:
-            iter = model.get_iter(path)
-            key = model.get_value(iter, 0)
-            self._remFileFromUIList(key)
-
-            # If added by rem from server button, data will have remove key
-            if data and data.has_key('remove'):
-                def call():
-                    params =  { 'id': key }
-
-                    try:
-                        opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
-                        opener.open("http://%s:%d/remove"%(self.server_ip, self.server_port), params)
-                    except:
-                        self._alert( _("Failed to send remove request to server") )
-                    self.show_throbber( False )
-
-                self.show_throbber(True, _("Please Wait... Sending request to server"))
-                threading.Thread(target=call).start()
-
-            # Attempt to remove file from system
-            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
-
-            try:
-                os.remove( bundle_path )
-            except:
-                _logger.warn("Could not remove file from system: %s",bundle_path)
-
-    def requestInsFile(self, widget, data=None):
-        _logger.info('Requesting to install file back to journal')
-
-        model, iterlist = self.treeview.get_selection().get_selected_rows()
-        for path in iterlist:
-            iter = model.get_iter(path)
-            key = model.get_value(iter, 0)
-
-            # Attempt to remove file from system
-            bundle_path = os.path.join(self._filepath, '%s.xoj' % key)
-
-            self._installBundle( bundle_path )
-            self._alert(_("Installed bundle to Jorunal"))
-
-    def requestDownloadFile(self, widget, data=None):
-        _logger.info('Requesting to Download file')
-        if self.treeview.get_selection().count_selected_rows() != 0:
-            model, iterlist = self.treeview.get_selection().get_selected_rows()
-            for path in iterlist:
-                iter = model.get_iter(path)
-                fi = model.get_value(iter, 1)
-                if fi.aquired == 0:
-                    if self._mode == 'SERVER':
-                        self._server_download_document( str( model.get_value(iter, 0)) )
-                    else:
-                        self._get_document(str( model.get_value(iter, 0)))
-                else:
-                    self._alert(_("File has already or is currently being downloaded"))
-        else:
-            self._alert(_("You must select a file to download"))
+    def remove_file_from_server( self, file_id ):
+        params =  { 'id': file_id }
+        try:
+            opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+            opener.open("http://%s:%d/remove"%(self.server_ip, self.server_port), params)
+        except:
+            raise ServerRequestFailure
 
 
-    def _addFileToUIList(self, fileid, fileinfo):
-        self.sharedFiles[fileid] = fileinfo
-        modle = self.treeview.get_model()
+    def updateFileObj( self, key, file_obj ):
+        if self.sharedFiles.has_key( key ):
+            self.sharedFiles[key] = file_obj
 
-        modle.append( None, [fileid, fileinfo])
+    def _registerShareFile( self, key, file_obj ):
+        self.sharedFiles[key] = file_obj
 
         # Notify connected users
         if self.initiating:
                 self.controlTube.FileAdd( simplejson.dumps(fileinfo.share_dump()) )
 
-    def _remFileFromUIList(self, id):
-        _logger.info('Requesting to delete file')
-
-        model = self.treeview.get_model()
-        iter = model.get_iter_first()
-        while iter:
-            if model.get_value( iter, 0 ) == id:
-                break
-            iter = model.iter_next( iter )
-
-        # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
-        if model.get_value(iter, 1).aquired == 0 or self.isServer or self._mode=="SERVER":
-            del self.sharedFiles[id]
-            model.remove( iter )
+    def _unregisterShareFile( self, key ):
+        del self.sharedFiles[key]
 
         # Notify connected users
         if self.initiating:
             self.controlTube.FileRem( simplejson.dumps(id) )
+
+
+
+    def delete_file( self, id ):
+        bundle_path = os.path.join(self._filepath, '%s.xoj' % id)
+        try:
+            os.remove( bundle_path )
+        except:
+            _logger.warn("Could not remove file from system: %s",bundle_path)
+
+    def server_ui_del_overide(self):
+        return self.isServer or self._mode=="SERVER"
 
     def getFileList(self):
         ret = {}
@@ -397,44 +294,6 @@ class FileShareActivity(Activity):
         self.disp = GuiView(self)
         self.set_canvas(self.disp)
         self.show_all()
-
-    def update_progress(self, id, bytes ):
-        model = self.treeview.get_model()
-        iter = model.get_iter_first()
-        while iter:
-            if model.get_value( iter, 0 ) == id:
-                break
-            iter = model.iter_next( iter )
-
-        if iter:
-            obj = model.get_value( iter, 1 )
-            obj.update_aquired( bytes )
-
-            # Store updated versoin of the object
-            self.sharedFiles[id] = obj
-            model.set_value( iter, 1, obj)
-
-            model.row_changed(model.get_path(iter), iter)
-
-    def set_installed( self, id, sucessful=True ):
-        model = self.treeview.get_model()
-        iter = model.get_iter_first()
-        while iter:
-            if model.get_value( iter, 0 ) == id:
-                break
-            iter = model.iter_next( iter )
-
-        if iter:
-            obj = model.get_value( iter, 1 )
-            if sucessful:
-                obj.set_installed()
-            else:
-                obj.set_failed()
-
-            # Store updated versoin of the object
-            self.sharedFiles[id] = obj
-            model.set_value( iter, 1, obj)
-            model.row_changed(model.get_path(iter), iter)
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')
@@ -498,9 +357,10 @@ class FileShareActivity(Activity):
 
     def _server_download_document( self, fileId ):
         addr = [self.server_ip, self.server_port]
+        self._download_document(addr, fileId)
         # Download the file at next avaialbe time.
-        gobject.idle_add(self._download_document, addr, fileId)
-        return False
+        #gobject.idle_add(self._download_document, addr, fileId)
+        #return False
 
 
     def _get_document(self,fileId):
@@ -509,8 +369,8 @@ class FileShareActivity(Activity):
                 tube_id = self.unused_download_tubes.pop()
             except (ValueError, KeyError), e:
                 _logger.debug('No tubes to get the document from right now: %s', e)
-                self._alert(_("All tubes are busy, file download cannot start"),_("Please wait and try again"))
-                return False
+                raise NoFreeTubes()
+
             # FIXME: should ideally have the CM listen on a Unix socket
             # instead of IPv4 (might be more compatible with Rainbow)
             chan = self._shared_activity.telepathy_tubes_chan
@@ -529,19 +389,9 @@ class FileShareActivity(Activity):
             assert self.addr[1] > 0 and self.addr[1] < 65536
 
         # Download the file at next avaialbe time.
-        gobject.idle_add(self._download_document, self.addr, fileId)
-        return False
-
-    def _alert(self, title, text=None, timeout=5):
-        alert = NotifyAlert(timeout=timeout)
-        alert.props.title = title
-        alert.props.msg = text
-        self.add_alert(alert)
-        alert.connect('response', self._alert_cancel_cb)
-        alert.show()
-
-    def _alert_cancel_cb(self, alert, response_id):
-        self.remove_alert(alert)
+        self._download_document(self.addr, fileId)
+        #gobject.idle_add(self._download_document, self.addr, fileId)
+        #return False
 
     def _list_tubes_reply_cb(self, tubes):
         for tube_info in tubes:
@@ -563,8 +413,7 @@ class FileShareActivity(Activity):
                 group_iface=self.tubes_chan[telepathy.CHANNEL_INTERFACE_GROUP])
 
             self.controlTube = TubeSpeak(tube_conn, self.initiating,
-                                         self.incomingRequest,
-                                         self._alert, self.getFileList)
+                                         self.incomingRequest, self.getFileList)
         elif (type == telepathy.TUBE_TYPE_STREAM and service == DIST_STREAM_SERVICE):
                 # Data tube, store for later
                 _logger.debug("New data tube added")
@@ -577,13 +426,22 @@ class FileShareActivity(Activity):
             for key in filelist:
                 if not self.sharedFiles.has_key(key):
                     fi = FileInfo.share_load(filelist[key])
-                    self._addFileToUIList(fi.id, fi)
+                    self.disp.guiHandler._addFileToUIList(fi.id, fi)
+                    # Register File with activity share list
+                    self._registerShareFile( fi.id, fi )
         elif action == "fileadd":
             addList = simplejson.loads( request )
             fi = FileInfo.share_load( addList )
-            self._addFileToUIList( fi.id, fi )
+            self.disp.guiHandler._addFileToUIList( fi.id, fi )
+            self._registerShareFile( fi.id, fi )
         elif action == "filerem":
-            self._remFileFromUIList( simplejson.loads( request ) )
+            id =  simplejson.loads( request )
+            # DO NOT DELETE IF TRANSFER IN PROGRESS/COMPLETE
+            if self.fileShare[id].aquired == 0:
+                self.disp.guiHandler._remFileFromUIList( id )
+                # UnRegister File with activity share list
+                self._unregisterShareFile( key )
+
         else:
             _logger.debug("Incoming tube Request: %s. Data: %s" % (action, request) )
 
@@ -597,7 +455,6 @@ class FileShareActivity(Activity):
         getter.connect("progress", self._download_progress_cb, documentId)
         getter.connect("error", self._download_error_cb, documentId)
         _logger.debug("Starting download to %s...", bundle_path)
-        self._alert(_("Starting file download"))
         getter.start(bundle_path)
         return False
 
@@ -606,14 +463,14 @@ class FileShareActivity(Activity):
 
         try:
             metadata = self._installBundle( tmp_file )
-            self._alert( _("File Downloaded"), metadata['title'])
-            self.set_installed( fileId )
+            self.disp.guiHandler._alert( _("File Downloaded"), metadata['title'])
+            self.disp.set_installed( fileId )
         except:
-            self._alert( _("File Download Failed") )
-            self.set_installed( fileId, False )
+            self.disp.guiHandler._alert( _("File Download Failed") )
+            self.disp.set_installed( fileId, False )
 
     def _download_progress_cb(self, getter, bytes_downloaded, fileId):
-        self.update_progress( fileId, bytes_downloaded )
+        self.disp.update_progress( fileId, bytes_downloaded )
 
         # Force gui to update if there are actions pending
         # Fixes bug where system appears to hang on FAST connections
@@ -622,7 +479,7 @@ class FileShareActivity(Activity):
 
     def _download_error_cb(self, getter, err, fileId):
         _logger.debug("Error getting document from tube. %s",  err )
-        self._alert(_("Error getting document"), err)
+        self.disp.guiHandler._alert(_("Error getting document"), err)
         #gobject.idle_add(self._get_document)
 
 

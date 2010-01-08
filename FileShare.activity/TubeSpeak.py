@@ -23,13 +23,12 @@ IFACE = SERVICE
 PATH = "/org/laptop/FileShare"
 
 class TubeSpeak(ExportedGObject):
-    def __init__(self, tube, is_initiator, text_received_cb, alert, get_fileList):
+    def __init__(self, tube, is_initiator, text_received_cb, get_fileList):
         super(TubeSpeak, self).__init__(tube, PATH)
         self._logger = logging.getLogger('fileshare-activity.TubeSpeak')
         self.tube = tube
         self.is_initiator = is_initiator
         self.text_received_cb = text_received_cb
-        self._alert = alert
         self.entered = False  # Have we set up the tube?
         self.getFileList = get_fileList
         self.tube.watch_participants(self.participant_change_cb)
