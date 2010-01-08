@@ -1,4 +1,5 @@
 import BaseHTTPServer
+import SocketServer
 import simplejson
 import os
 import cgi
@@ -176,11 +177,22 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
             self.send_error(404,'File Not Found (POST): %s' % self.path)
 
 
-def run(server_class=BaseHTTPServer.HTTPServer, handler_class=MyServer):
+
+
+class myWebServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+    pass
+
+
+
+def run(server_class=BaseHTTPServer.HTTPServer, handler_class=BaseHTTPServer.BaseHTTPRequestHandler):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     httpd.serve_forever()
 
 if __name__ == '__main__':
     fileMan = FileManager()
-    run()
+    run(myWebServer, MyServer)
+
+    # Activate the server; this will keep running until you
+    # interrupt the program with Ctrl-C
+    server.serve_forever()
