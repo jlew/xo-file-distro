@@ -188,6 +188,77 @@ class GuiHandler():
     def _alert_cancel_cb(self, alert, response_id):
         self.activity.remove_alert(alert)
 
+    def showAdmin(self, widget, data=None):
+        def call():
+            try:
+                userList = self.activity.get_server_user_list()
+
+            except ServerRequestFailure:
+                    self._alert(_("Failed to get user list from server"))
+                    self.show_throbber( False )
+            else:
+                level = [_("Download Only"), _("Upload/Remove"), _("Admin")]
+
+                myTable = gtk.Table(10, 1, False)
+                hbbox = gtk.HButtonBox()
+                returnBut = gtk.Button(_("Return to Main Screen"))
+                returnBut.connect("clicked",self.restore_view, None)
+                hbbox.add(returnBut)
+
+                listbox = gtk.VBox()
+
+                for key in userList:
+                    holder = gtk.HBox()
+                    label = gtk.Label(userList[key][0])
+                    label.set_alignment(0, 0)
+                    holder.pack_start(label)
+
+                    if key == self.activity._user_key_hash:
+                        mode_box = gtk.Label(level[userList[key][1]])
+                        mode_box.set_alignment(1,0)
+                    else:
+                        mode_box = gtk.combo_box_new_text()
+                        for option in level:
+                            mode_box.append_text( option )
+
+                        mode_box.set_active(userList[key][1])
+                        mode_box.connect("changed", self.user_changed, key)
+
+                    holder.pack_start(mode_box, False, False, 0)
+                    listbox.pack_start(holder, False, False, 0)
+
+                window = gtk.ScrolledWindow()
+                window.add_with_viewport(listbox)
+
+                myTable.attach(hbbox,0,1,0,1)
+                myTable.attach(window,0,1,1,10)
+
+                self.activity.set_canvas(myTable)
+                self.activity.show_all()
+
+        self.show_throbber(True, _("Please Wait... Requesting user list from server"))
+        threading.Thread(target=call).start()
+
+
+    def user_changed(self, widget, id):
+        widget.set_sensitive(False)
+        def change():
+            try:
+                self.activity.change_server_user(id, widget.get_active())
+                widget.set_sensitive(True)
+            except ServerRequestFailure:
+                parent = widget.get_parent()
+                parent.remove(widget)
+                lbl = gtk.Label(_("User Change Failed"))
+                lbl.set_alignment(1,0)
+                lbl.show()
+                parent.add( lbl )
+
+        threading.Thread(target=change).start()
+
+    def restore_view(self, widget, data = None):
+        self.show_throbber( False )
+
 
 class GuiView(gtk.Table):
     """
@@ -219,7 +290,7 @@ class GuiView(gtk.Table):
             hbbox.add(remFileButton)
 
         else:
-            if activity._mode == 'SERVER':
+            if activity._mode == 'SERVER' and activity._user_permissions != 0:
                 addFileButton = gtk.Button(_("Upload A File"))
                 addFileButton.connect("clicked", self.guiHandler.requestAddFile, {'upload':True})
                 hbbox.add(addFileButton)
@@ -228,7 +299,10 @@ class GuiView(gtk.Table):
                 remFileButton.connect("clicked", self.guiHandler.requestRemFile, {'remove':True})
                 hbbox.add(remFileButton)
 
-
+                if activity._user_permissions == 2:
+                    adminButton = gtk.Button(_("Server Settings"))
+                    adminButton.connect("clicked", self.guiHandler.showAdmin, None)
+                    hbbox.add(adminButton)
 
             downloadFileButton = gtk.Button(_("Download File"))
             downloadFileButton.connect("clicked", self.guiHandler.requestDownloadFile, None)

@@ -24,6 +24,7 @@ import journalentrybundle
 import dbus
 import gobject
 import zipfile
+from hashlib import sha1
 from gettext import gettext as _
 
 from sugar.activity.activity import Activity, ActivityToolbox
@@ -101,6 +102,10 @@ class FileShareActivity(Activity):
         self._mode = "P2P"
         prof = profile.get_profile()
 
+        self._user_key_hash = sha1(prof.pubkey).hexdigest()
+        self._user_nick = profile.get_nick_name()
+        self._user_permissions = 0
+
         jabber_serv = None
         #Need to check if on 82 or higher
         if hasattr(prof, 'jabber_server'):
@@ -114,6 +119,7 @@ class FileShareActivity(Activity):
         if jabber_serv:
             self.server_ip = jabber_serv
             self.server_port= 14623
+            self.s_version = 0
 
             if self.isServer and self.check_for_server() and self._server_mode():
                 self._mode = "SERVER"
@@ -156,12 +162,50 @@ class FileShareActivity(Activity):
             if r1.status == 200:
                 s_version= r1.read()
                 conn.close()
-                return s_version
+
+                if int(s_version) >= 2:
+                    # Version 2 supports permissions, announce user so server
+                    # can cache user info and be added to the access list if allowed
+
+                    params =  { 'id': self._user_key_hash,
+                                'nick': self._user_nick
+                              }
+                    try:
+                        opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+                        f = opener.open("http://%s:%d/announce_user"%(self.server_ip, self.server_port), params)
+                        self._user_permissions = int(f.read())
+                    except:
+                        raise ServerRequestFailure
+
+                else:
+                    # Older version didn't have permissions, set 1 as default (upload/remove)
+                    self._user_permissions = 1
+                self.s_version = s_version
+                return True
             else:
                 return False
         except:
             return False
 
+    def get_server_user_list(self):
+        params =  { 'id': self._user_key_hash }
+        try:
+            opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+            f = opener.open("http://%s:%d/user_list"%(self.server_ip, self.server_port), params)
+            return simplejson.loads(f.read())
+        except:
+            raise ServerRequestFailure
+
+    def change_server_user(self, userId, level):
+        params = { 'id': self._user_key_hash,
+                   'userid': userId,
+                   'level': level
+                 }
+        try:
+            opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
+            f = opener.open("http://%s:%d/user_mod"%(self.server_ip, self.server_port), params)
+        except:
+            raise ServerRequestFailure
 
     def build_file(self, jobject):
         #If object has activity id and it is filled in, use that as hash
@@ -209,6 +253,10 @@ class FileShareActivity(Activity):
         params = { 'jdata': simplejson.dumps(file_info.share_dump()),
                     'file':  open(bundle_path, 'rb')
                 }
+
+        if self.s_version >= 2:
+            params['id'] = self._user_key_hash
+
         try:
             opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
             opener.open("http://%s:%d/upload"%(self.server_ip, self.server_port), params)
@@ -216,7 +264,11 @@ class FileShareActivity(Activity):
             raise FileUploadFailure()
 
     def remove_file_from_server( self, file_id ):
-        params =  { 'id': file_id }
+        params =  { 'fid': file_id }
+
+        if self.s_version >= 2:
+            params['id'] = self._user_key_hash
+
         try:
             opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
             opener.open("http://%s:%d/remove"%(self.server_ip, self.server_port), params)

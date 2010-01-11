@@ -5,7 +5,7 @@ import os
 import cgi
 
 # Version string for future protocol change as well as server verification
-s_version = 1
+s_version = 2
 port = 14623
 
 class FileManager:
@@ -14,6 +14,7 @@ class FileManager:
     """
     def __init__(self, file_path = "shared_files"):
         self.fileList = {}
+        self.userList = {}
         self.file_path = file_path
         self.load()
 
@@ -22,17 +23,26 @@ class FileManager:
         Loads file data from __json_data.json if it exists in the
         file_path
         """
-        settings_path = os.path.join(self.file_path, "__json_data.json")
+        settings_path = os.path.join(self.file_path, "__file_data.json")
         if os.path.exists( settings_path ):
             self.fileList = simplejson.loads( open( settings_path, 'r' ).read() )
+
+        settings_path = os.path.join(self.file_path, "__user_data.json")
+        if os.path.exists( settings_path ):
+            self.userList = simplejson.loads( open( settings_path, 'r' ).read() )
 
     def save(self):
         """
         Saves the current file list into __json_data.json
         """
-        settings_path = os.path.join(self.file_path, "__json_data.json")
+        settings_path = os.path.join(self.file_path, "__file_data.json")
         f = open( settings_path, 'w' )
         f.write( simplejson.dumps( self.fileList ) )
+        f.close()
+
+        settings_path = os.path.join(self.file_path, "__user_data.json")
+        f = open( settings_path, 'w' )
+        f.write( simplejson.dumps( self.userList ) )
         f.close()
 
     def add_file(self, key, dict, data):
@@ -72,6 +82,12 @@ class FileManager:
         """
         return simplejson.dumps(self.fileList)
 
+    def get_user_str(self):
+        """
+        Dumps a json string of the user list
+        """
+        return simplejson.dumps(self.userList)
+
     def get_file_contents(self, key):
         """
         Returns the file data based off its key
@@ -87,17 +103,53 @@ class FileManager:
         """
         return self.fileList.has_key( key )
 
+    def user_permissions(self, id, nick):
+        print "GOT USER REQUEST %s (%s)" % (nick, id)
+        if self.userList.has_key(id) == False:
+            permission = 0
+            if len( self.userList ) == 0:
+                permission = 2
+            self.userList[id] = [nick, permission]
+            self.save()
+
+        if self.userList[id][0] != nick:
+            self.userList[id][0] = nick
+            self.save()
+
+        return self.userList[id][1]
+
+    def change_user_permissions(self, id, level):
+        if self.userList.has_key(id):
+            self.userList[id][1] = int(level)
+            self.save()
+
+    def can_rem(self, id):
+        return self.userList.has_key(id) and self.userList[id][1] != 0
+
+    def can_upload(self, id):
+        return self.userList.has_key(id) and self.userList[id][1] != 0
+
+    def can_admin(self, id):
+        return self.userList.has_key(id) and self.userList[id][1] == 2
+
 
 class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
     """
     Simple http server:
 
         Pages:
-            * /, /index.html    A page saying that the system is running
-            * /version          Returns server revision number
-            * /fileList         A json string of the file list
-            * /ANYFILEID        Downloads the file if the id matches
-            * POST /upload      Expects an upload jdata and file
+            GET:
+                * /, /index.html    A page saying that the system is running
+                * /version          Returns server revision number
+                * /fileList         A json string of the file list
+                * /{ANY_ID}         Downloads the file if the id matches
+            POST:
+                * /upload           Adds file (expects id, jdata and file)
+                * /remove           Removes file (expects id and fid)
+                * /announce_user    Adds user to list (and responds with permission level)
+                                    (expects id, nick)
+                * /user_list        Returns user list (expects id, must have admin permission level)
+                * /user_mod         Changes user permissions (expects id (ADMIN), userId, level)
     """
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
@@ -147,34 +199,80 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
                          })
 
         if self.path == "/upload":
-            # Begin the response
-            self.send_response(200)
-            self.end_headers()
+            if form.has_key('id') and fileMan.can_upload( form['id'].value ):
+                # Begin the response
+                self.send_response(200, 'OK')
+                self.end_headers()
 
-            if( form.has_key('jdata') and form.has_key('file') ):
-                try:
-                    data = simplejson.loads( form['jdata'].value )
-                    file_data = form['file'].file.read()
-                    fileMan.add_file(data[0], data, file_data)
+                if( form.has_key('jdata') and form.has_key('file') ):
+                    try:
+                        data = simplejson.loads( form['jdata'].value )
+                        file_data = form['file'].file.read()
+                        fileMan.add_file(data[0], data, file_data)
 
-                    # Begin the response
-                    self.send_response(200)
-                    self.end_headers()
-                except:
-                    self.send_error(500,'Server Error or Invalid Request')
-                    self.end_headers()
-            return
+                        # Begin the response
+                        self.send_response(200)
+                        self.end_headers()
+                    except:
+                        self.send_error(500,'Server Error or Invalid Request')
+                        self.end_headers()
+                return
+            else:
+                self.send_error(403, "Forbidden")
+                self.end_headers()
         elif self.path == "/remove":
-            self.send_response(200)
-            self.end_headers()
+            if( form.has_key('id') and fileMan.can_rem( form['id'].value ) ):
+                self.send_response(200, 'OK')
+                self.end_headers()
 
-            print form.keys()
+                if( form.has_key('fid') and fileMan.has_file_key( form['fid'].value ) ):
+                    fileMan.rem_file( form['fid'].value )
+            else:
+                self.send_error(403, "Forbidden")
+                self.end_headers()
 
-            if( form.has_key('id') and fileMan.has_file_key( form['id'].value ) ):
-                fileMan.rem_file( form['id'].value )
+        elif self.path == "/announce_user":
+            if( form.has_key('id') and form.has_key('nick') ):
+                self.send_response(200, 'OK')
+                self.end_headers()
+                self.wfile.write( fileMan.user_permissions(form['id'].value, form['nick'].value) )
+            else:
+                self.send_error(400, 'Bad Request')
+                self.end_headers()
+
+        elif self.path == "/user_list":
+            if form.has_key('id'):
+                if fileMan.can_admin( form['id'].value ):
+                    self.send_response(200, 'OK')
+                    self.end_headers()
+                    self.wfile.write( fileMan.get_user_str() )
+                else:
+                    self.send_error(403, "Forbidden")
+                    self.end_headers()
+            else:
+                self.send_error(400, 'Bad Request')
+                self.end_headers()
+
+        elif self.path == "/user_mod":
+            if form.has_key('id') and form.has_key('userid') and form.has_key('level'):
+                if fileMan.can_admin( form['id'].value ):
+                    if form['id'].value != form['userid'].value:
+                        self.send_response(200, 'OK')
+                        self.end_headers()
+                        fileMan.change_user_permissions(form['userid'].value, form['level'].value)
+                    else:
+                        self.send_error(400, 'Bad Request, Can not modify yourself')
+                        self.end_headers()
+                else:
+                    self.send_error(403, "Forbidden")
+                    self.end_headers()
+            else:
+                self.send_error(400, 'Bad Request')
+                self.end_headers()
 
         else:
             self.send_error(404,'File Not Found (POST): %s' % self.path)
+            self.end_headers()
 
 
 
