@@ -11,6 +11,7 @@ po/FileShare.pot
 po/POTFILES.in
 activity/activity-fileshare.svg
 activity/activity.info
+MyExceptions.py
 lib/simplejson/encoder.py
 lib/simplejson/tool.py
 lib/simplejson/decoder.py
