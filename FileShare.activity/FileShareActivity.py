@@ -564,8 +564,13 @@ class FileShareActivity(Activity):
     def write_file(self, file_path):
         _logger.debug('Writing activity file')
 
-        # If no files to save, nothing to do
+        file = zipfile.ZipFile(file_path, "w")
+
+        # If no files to save save empty list
         if len(self.sharedFiles) == 0:
+            #hack to empty file if existed before
+            file.writestr("_filelist.json", simplejson.dumps({}))
+            file.close()
             return
 
         if self._close_requested:
@@ -580,14 +585,11 @@ class FileShareActivity(Activity):
             # Return not allowing files to be saved
             if response == gtk.RESPONSE_NO:
                 #hack to empty file if existed before
-                file = zipfile.ZipFile(file_path, "w")
                 file.writestr("_filelist.json", simplejson.dumps({}))
                 file.close()
                 return
 
-        # Create zip of tmp directory
-        file = zipfile.ZipFile(file_path, "w")
-
+        # Save, requested, write files into zip and save file list
         try:
             for name in os.listdir(self._filepath):
                 file.write(os.path.join( self._filepath, name), name, zipfile.ZIP_DEFLATED)
