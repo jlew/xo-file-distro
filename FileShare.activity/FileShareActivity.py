@@ -33,14 +33,14 @@ from sugar import network
 from sugar import profile
 
 from GuiView import GuiView
-from MyExceptions import InShareException, FileUploadFailure, ServerRequestFailure, NoFreeTubes
+from MyExceptions import InShareException, FileUploadFailure, ServerRequestFailure, NoFreeTubes, TimeOut
 
 from TubeSpeak import TubeSpeak
 import FileInfo
 from hashlib import sha1
 
 import urllib, urllib2, MultipartPostHandler, httplib
-import threading
+import threading, signal
 
 import logging
 _logger = logging.getLogger('fileshare-activity')
@@ -106,6 +106,18 @@ class FileShareActivity(Activity):
         self._user_nick = profile.get_nick_name()
         self._user_permissions = 0
 
+        # INITIALIZE GUI
+        ################
+        self.set_title('File Share')
+
+        # Create Toolbox
+        toolbox = ActivityToolbox(self)
+        self.set_toolbox(toolbox)
+        toolbox.show()
+
+        # Set gui display object
+        self.disp = GuiView(self)
+
         jabber_serv = None
         #Need to check if on 82 or higher
         if hasattr(prof, 'jabber_server'):
@@ -121,12 +133,11 @@ class FileShareActivity(Activity):
             self.server_port= 14623
             self.s_version = 0
 
+
+            self.disp.guiHandler.show_throbber(True, _("Please Wait... Searching for Server"))
             if self.isServer and self.check_for_server() and self._server_mode():
                 self._mode = "SERVER"
                 self.isServer = False
-
-        # Build and display gui
-        self._buildGui()
 
         if self._mode == 'P2P':
             # Connect to shared and join calls
@@ -153,12 +164,25 @@ class FileShareActivity(Activity):
             self.disp.guiHandler.show_throbber(True, _("Please Wait... Requesting file list from server"))
             threading.Thread(target=call).start()
 
+        # Build table and display the gui
+        self.disp.build_table()
+        self.set_canvas(self.disp)
+        self.show_all()
+
     def check_for_server(self):
+
+        def raise_timeout(signum, frame):
+            raise TimeOut("Timeout!")
+
+        signal.signal(signal.SIGALRM, raise_timeout)
+
         s_version = None
         try:
+            signal.alarm(10) # raise alarm in 10 seconds
             conn = httplib.HTTPConnection( self.server_ip, self.server_port)
             conn.request("GET", "/version")
             r1 = conn.getresponse()
+            signal.alarm(0)
             if r1.status == 200:
                 s_version= r1.read()
                 conn.close()
@@ -181,10 +205,13 @@ class FileShareActivity(Activity):
                     # Older version didn't have permissions, set 1 as default (upload/remove)
                     self._user_permissions = 1
                 self.s_version = s_version
+                signal.alarm(0) # disable alarm
                 return True
             else:
+                signal.alarm(0) # disable alarm
                 return False
         except:
+            signal.alarm(0) # disable alarm
             return False
 
     def get_server_user_list(self):
@@ -332,20 +359,6 @@ class FileShareActivity(Activity):
             return True
         else:
             return False
-
-
-    def _buildGui(self):
-        self.set_title('File Share')
-
-        # Create Toolbox
-        ################
-        toolbox = ActivityToolbox(self)
-        self.set_toolbox(toolbox)
-        toolbox.show()
-
-        self.disp = GuiView(self)
-        self.set_canvas(self.disp)
-        self.show_all()
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')

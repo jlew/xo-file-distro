@@ -159,7 +159,7 @@ class GuiHandler():
 
 
 
-    def show_throbber(self, show, mesg=""):
+    def show_throbber(self, show, mesg="", addon=None):
         if show:
             #Build Throbber
             throbber = gtk.VBox()
@@ -167,6 +167,9 @@ class GuiHandler():
             img.set_from_file('throbber.gif')
             throbber.pack_start(img)
             throbber.pack_start(gtk.Label(mesg))
+
+            if addon:
+                throbber.pack_start( addon )
 
             self.activity.set_canvas(throbber)
             self.activity.show_all()
@@ -269,14 +272,14 @@ class GuiView(gtk.Table):
         self.activity = activity
         self.treeview = gtk.TreeView(gtk.TreeStore(str,object))
         self.guiHandler = GuiHandler( activity, self.treeview )
-        self.build_table(activity)
+        #self.build_table(activity)
 
-    def build_table(self, activity):
+    def build_table(self):
         # Create button bar
         ###################
         hbbox = gtk.HButtonBox()
 
-        if activity.isServer:
+        if self.activity.isServer:
             addFileButton = gtk.Button(_("Add File"))
             addFileButton.connect("clicked", self.guiHandler.requestAddFile, None)
             hbbox.add(addFileButton)
@@ -290,7 +293,7 @@ class GuiView(gtk.Table):
             hbbox.add(remFileButton)
 
         else:
-            if activity._mode == 'SERVER' and activity._user_permissions != 0:
+            if self.activity._mode == 'SERVER' and self.activity._user_permissions != 0:
                 addFileButton = gtk.Button(_("Upload A File"))
                 addFileButton.connect("clicked", self.guiHandler.requestAddFile, {'upload':True})
                 hbbox.add(addFileButton)
@@ -299,7 +302,7 @@ class GuiView(gtk.Table):
                 remFileButton.connect("clicked", self.guiHandler.requestRemFile, {'remove':True})
                 hbbox.add(remFileButton)
 
-                if activity._user_permissions == 2:
+                if self.activity._user_permissions == 2:
                     adminButton = gtk.Button(_("Server Settings"))
                     adminButton.connect("clicked", self.guiHandler.showAdmin, None)
                     hbbox.add(adminButton)
