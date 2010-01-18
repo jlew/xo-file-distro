@@ -82,7 +82,10 @@ class JournalEntryBundle(Bundle):
         return zip_root_dir
 
     def set_entry_id(self, entry_id):
-        zip_file = zipfile.ZipFile(self._path,'a')
+        try:
+            zip_file = zipfile.ZipFile(self._path,'a')
+        except:
+            zip_file = zipfile.ZipFile(self._path,'w')
         file_names = zip_file.namelist()
         if len(file_names) == 0:
             base_dir = zipfile.ZipInfo(entry_id + '/')
