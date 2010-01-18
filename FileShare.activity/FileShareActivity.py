@@ -27,7 +27,8 @@ import zipfile
 from hashlib import sha1
 from gettext import gettext as _
 
-from sugar.activity.activity import Activity, ActivityToolbox
+from sugar.activity.activity import Activity
+
 from sugar.presence.tubeconn import TubeConnection
 from sugar import network
 from sugar import profile
@@ -101,7 +102,6 @@ class FileShareActivity(Activity):
 
         self._mode = "P2P"
         prof = profile.get_profile()
-
         self._user_key_hash = sha1(prof.pubkey).hexdigest()
         self._user_nick = profile.get_nick_name()
         self._user_permissions = 0
@@ -110,15 +110,25 @@ class FileShareActivity(Activity):
         ################
         self.set_title('File Share')
 
-        # Create Toolbox
-        toolbox = ActivityToolbox(self)
-        self.set_toolbox(toolbox)
-        toolbox.show()
-
         # Set gui display object
         self.disp = GuiView(self)
 
+        # Set Toolbars
+        self.disp.build_toolbars()
+
+        # Build table and display the gui
+        self.disp.build_table()
+
+        # Connect to shared and join calls
+        self._sh_hnd = self.connect('shared', self._shared_cb)
+        self._jo_hnd = self.connect('joined', self._joined_cb)
+
+        self.set_canvas(self.disp)
+        self.show_all()
+
+    def switch_to_server(self):
         jabber_serv = None
+        prof = profile.get_profile()
         #Need to check if on 82 or higher
         if hasattr(prof, 'jabber_server'):
             jabber_serv = prof.jabber_server
@@ -133,41 +143,56 @@ class FileShareActivity(Activity):
             self.server_port= 14623
             self.s_version = 0
 
-
             self.disp.guiHandler.show_throbber(True, _("Please Wait... Searching for Server"))
-            if self.isServer and self.check_for_server() and self._server_mode():
+            if self.isServer and self.check_for_server():
                 self._mode = "SERVER"
                 self.isServer = False
 
-        if self._mode == 'P2P':
-            # Connect to shared and join calls
-            self.connect('shared', self._shared_cb)
-            self.connect('joined', self._joined_cb)
+                # Remove shared mode
+                # Disable handlers incase not shared yet
+                self.disconnect( self._sh_hnd )
+                self.disconnect( self._jo_hnd )
 
-        else:
-            #IN SERVER MODE, GET SERVER FILE LIST
-            def call():
-                try:
-                    conn = httplib.HTTPConnection( self.server_ip, self.server_port)
-                    conn.request("GET", "/filelist")
-                    r1 = conn.getresponse()
-                    if r1.status == 200:
-                        data = r1.read()
-                        conn.close()
-                        self.incomingRequest('filelist',data)
-                    else:
-                        self.disp.guiHandler._alert("Error getting file list")
-                except:
-                    self.disp.guiHandler._alert("Error getting file list")
-                self.disp.guiHandler.show_throbber(False)
+                # Disable notify the tube of changes
+                self.initiating = False
 
-            self.disp.guiHandler.show_throbber(True, _("Please Wait... Requesting file list from server"))
-            threading.Thread(target=call).start()
+                # Disable greeting people joining tube
+                if self.controlTube:
+                    self.controlTube.switch_to_server_mode()
 
-        # Build table and display the gui
-        self.disp.build_table()
-        self.set_canvas(self.disp)
-        self.show_all()
+                # Set activity to private mode if shared
+                if self._shared_activity:
+                    ##TODO:
+                    pass
+
+                # Clear file List (can't go to server mode after sharing, clear list)
+                # Will not delete files so connected people can still download files.
+                self.disp.clear_files(False)
+
+                # Rebuild gui, now we are in server mode
+                self.disp.build_toolbars()
+
+                #self.set_canvas(self.disp)
+                #self.show_all()
+
+                #IN SERVER MODE, GET SERVER FILE LIST
+                def call():
+                    try:
+                        conn = httplib.HTTPConnection( self.server_ip, self.server_port)
+                        conn.request("GET", "/filelist")
+                        r1 = conn.getresponse()
+                        if r1.status == 200:
+                            data = r1.read()
+                            conn.close()
+                            self.incomingRequest('filelist',data)
+                        else:
+                            self.disp.guiHandler._alert(str(r1.status), _("Error getting file list") )
+                    except:
+                        self.disp.guiHandler._alert(_("Error getting file list"))
+                    self.disp.guiHandler.show_throbber(False)
+
+                self.disp.guiHandler.show_throbber(True, _("Requesting file list from server"))
+                threading.Thread(target=call).start()
 
     def check_for_server(self):
 
@@ -219,8 +244,9 @@ class FileShareActivity(Activity):
         try:
             opener = urllib2.build_opener( MultipartPostHandler.MultipartPostHandler)
             f = opener.open("http://%s:%d/user_list"%(self.server_ip, self.server_port), params)
-            return simplejson.loads(f.read())
-        except:
+            response = f.read()
+            return simplejson.loads(response)
+        except Exception:
             raise ServerRequestFailure
 
     def change_server_user(self, userId, level):
@@ -344,21 +370,6 @@ class FileShareActivity(Activity):
             return os.path.join(self._filepath, '%s.xoj' % path[1:])
         else:
             _logger.debug("INVALID PATH",path[1:])
-
-    def _server_mode(self):
-        dialog = gtk.Dialog(_("Please Select Share Mode"), self, 0,
-            (_("Share with others"), gtk.RESPONSE_CANCEL, _("Connect to Server"), gtk.RESPONSE_OK))
-
-        dialog.vbox.pack_start(gtk.Label(_("Share with others or connect to server?")), False, False, 0)
-
-        dialog.show_all()
-        response = dialog.run()
-        dialog.destroy()
-
-        if response == gtk.RESPONSE_OK:
-            return True
-        else:
-            return False
 
     def _shared_cb(self, activity):
         _logger.debug('Activity is now shared')

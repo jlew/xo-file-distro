@@ -31,7 +31,11 @@ class TubeSpeak(ExportedGObject):
         self.text_received_cb = text_received_cb
         self.entered = False  # Have we set up the tube?
         self.getFileList = get_fileList
+        self.still_serving = True
         self.tube.watch_participants(self.participant_change_cb)
+
+    def switch_to_server_mode(self):
+        self.still_serving = False
 
     def participant_change_cb(self, added, removed):
         if not self.entered:
@@ -85,7 +89,7 @@ class TubeSpeak(ExportedGObject):
     # Callbacks
     def announceJoin_cb(self, sender=None):
         """Somebody joined."""
-        if sender == self.tube.get_unique_name():
+        if sender == self.tube.get_unique_name() or not self.still_serving:
             # sender is my bus name, so ignore my own signal
             return
         self._logger.debug('Welcoming %s and sending them data', sender)

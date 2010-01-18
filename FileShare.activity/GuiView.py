@@ -19,20 +19,21 @@ import FileInfo
 import threading
 from gettext import gettext as _
 
+
+from sugar.activity.activity import ActivityToolbox
+from sugar.graphics.toolbutton import ToolButton
 from sugar.graphics.objectchooser import ObjectChooser
-from sugar.graphics.alert import NotifyAlert
+from sugar.graphics.alert import NotifyAlert, Alert
 
 from MyExceptions import InShareException, FileUploadFailure, ServerRequestFailure, NoFreeTubes
 import logging
 _logger = logging.getLogger('fileshare-activity')
 
-
-
-
 class GuiHandler():
     def __init__(self, activity, tree):
         self.activity = activity
         self.treeview = tree
+        self.tb_alert = None
 
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
@@ -173,9 +174,16 @@ class GuiHandler():
 
             self.activity.set_canvas(throbber)
             self.activity.show_all()
+
+            self.activity.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.WATCH))
+            self.activity.set_sensitive(False)
+
         else:
             self.activity.set_canvas(self.activity.disp)
             self.activity.show_all()
+
+            self.activity.window.set_cursor(None)
+            self.activity.set_sensitive(True)
 
         while gtk.events_pending():
             gtk.main_iteration()
@@ -191,15 +199,18 @@ class GuiHandler():
     def _alert_cancel_cb(self, alert, response_id):
         self.activity.remove_alert(alert)
 
+    def switch_to_server(self, widget, data=None):
+        self.activity.switch_to_server()
+
     def showAdmin(self, widget, data=None):
         def call():
             try:
                 userList = self.activity.get_server_user_list()
-
             except ServerRequestFailure:
-                    self._alert(_("Failed to get user list from server"))
-                    self.show_throbber( False )
+                self._alert(_("Failed to get user list from server"))
+                self.show_throbber( False )
             else:
+                self.show_throbber( False )
                 level = [_("Download Only"), _("Upload/Remove"), _("Admin")]
 
                 myTable = gtk.Table(10, 1, False)
@@ -236,10 +247,11 @@ class GuiHandler():
                 myTable.attach(hbbox,0,1,0,1)
                 myTable.attach(window,0,1,1,10)
 
+                #self.activity.disp.build_toolbars( False )
                 self.activity.set_canvas(myTable)
                 self.activity.show_all()
 
-        self.show_throbber(True, _("Please Wait... Requesting user list from server"))
+        self.show_throbber(True, _("Requesting user list from server"))
         threading.Thread(target=call).start()
 
 
@@ -260,57 +272,102 @@ class GuiHandler():
         threading.Thread(target=change).start()
 
     def restore_view(self, widget, data = None):
-        self.show_throbber( False )
+        #self.....build_toolbars()
+        self.activity.set_canvas(self.activity.disp)
+        #self.show_throbber( False )
 
 
-class GuiView(gtk.Table):
+class GuiView(gtk.ScrolledWindow):
     """
     This class is used to just remove the table setup from the main file
     """
     def __init__(self, activity):
-        gtk.Table.__init__(self, rows=10, columns=1, homogeneous=False)
+        gtk.ScrolledWindow.__init__(self)
+        self.set_policy( gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC )
         self.activity = activity
         self.treeview = gtk.TreeView(gtk.TreeStore(str,object))
         self.guiHandler = GuiHandler( activity, self.treeview )
         #self.build_table(activity)
 
-    def build_table(self):
-        # Create button bar
-        ###################
-        hbbox = gtk.HButtonBox()
+    def build_toolbars(self, custom = True):
+        self.action_buttons = {}
+
+        # BUILD CUSTOM TOOLBAR
+        action_bar = gtk.Toolbar()
+        self.action_buttons['add'] = ToolButton('fs_gtk-add')
+        self.action_buttons['add'].set_tooltip(_("Add Object"))
+
+        self.action_buttons['rem'] = ToolButton('fs_gtk-remove')
+        self.action_buttons['rem'].set_tooltip(_("Remove Object(s)"))
+
+        self.action_buttons['save'] = ToolButton('filesave')
+        self.action_buttons['save'].set_tooltip( _("Copy Object(s) to Journal") )
+
+
+        self.action_buttons['down'] = ToolButton('epiphany-download')
+        self.action_buttons['down'].set_tooltip( _('Download Object(s)') )
+
+        self.action_buttons['admin'] = ToolButton('gtk-network')
+        self.action_buttons['admin'].set_tooltip( _('Server Permissions') )
+
+        self.action_buttons['server'] = ToolButton('gaim-link')
+        self.action_buttons['server'].set_tooltip( _('Connect to Server') )
+
 
         if self.activity.isServer:
-            addFileButton = gtk.Button(_("Add File"))
-            addFileButton.connect("clicked", self.guiHandler.requestAddFile, None)
-            hbbox.add(addFileButton)
+            self.action_buttons['add'].connect("clicked", self.guiHandler.requestAddFile, None)
+            self.action_buttons['save'].connect("clicked", self.guiHandler.requestInsFile, None)
+            self.action_buttons['rem'].connect("clicked", self.guiHandler.requestRemFile, None)
+            self.action_buttons['server'].connect("clicked", self.guiHandler.switch_to_server, None)
 
-            insFileButton = gtk.Button(_("Copy to Journal"))
-            insFileButton.connect("clicked", self.guiHandler.requestInsFile, None)
-            hbbox.add(insFileButton)
-
-            remFileButton = gtk.Button(_("Remove Selected File"))
-            remFileButton.connect("clicked", self.guiHandler.requestRemFile, None)
-            hbbox.add(remFileButton)
+            action_bar.insert(self.action_buttons['add'], -1)
+            action_bar.insert(self.action_buttons['save'], -1)
+            action_bar.insert(self.action_buttons['rem'], -1)
+            action_bar.insert(self.action_buttons['server'], -1)
 
         else:
-            if self.activity._mode == 'SERVER' and self.activity._user_permissions != 0:
-                addFileButton = gtk.Button(_("Upload A File"))
-                addFileButton.connect("clicked", self.guiHandler.requestAddFile, {'upload':True})
-                hbbox.add(addFileButton)
+            self.action_buttons['down'].connect("clicked", self.guiHandler.requestDownloadFile, None)
+            action_bar.insert(self.action_buttons['down'], -1)
 
-                remFileButton = gtk.Button(_("Remove From Server"))
-                remFileButton.connect("clicked", self.guiHandler.requestRemFile, {'remove':True})
-                hbbox.add(remFileButton)
+            if self.activity._mode == 'SERVER' and self.activity._user_permissions != 0:
+                self.action_buttons['add'].connect("clicked", self.guiHandler.requestAddFile, {'upload':True})
+                self.action_buttons['rem'].connect("clicked", self.guiHandler.requestRemFile, {'remove':True})
+
+                action_bar.insert(self.action_buttons['add'], -1)
+                action_bar.insert(self.action_buttons['rem'], -1)
 
                 if self.activity._user_permissions == 2:
-                    adminButton = gtk.Button(_("Server Settings"))
-                    adminButton.connect("clicked", self.guiHandler.showAdmin, None)
-                    hbbox.add(adminButton)
+                    self.action_buttons['admin'].connect("clicked", self.guiHandler.showAdmin, None)
+                    action_bar.insert(self.action_buttons['admin'], -1)
 
-            downloadFileButton = gtk.Button(_("Download File"))
-            downloadFileButton.connect("clicked", self.guiHandler.requestDownloadFile, None)
-            hbbox.add(downloadFileButton)
+        action_bar.show_all()
 
+        self.toolbar_set_selection( False )
+
+        # Create Toolbox
+        toolbox = ActivityToolbox(self.activity)
+
+        if custom:
+            toolbox.add_toolbar(_("Actions"), action_bar)
+
+        self.activity.set_toolbox(toolbox)
+        toolbox.show()
+
+    def on_selection_changed(self, selection):
+        if selection.count_selected_rows() == 0:
+            self.toolbar_set_selection(False)
+        else:
+            self.toolbar_set_selection(True)
+
+    def toolbar_set_selection(self, selected):
+        require_selection = ['save', 'rem', 'down']
+        for key in require_selection:
+            if selected:
+                self.action_buttons[key].set_sensitive( True )
+            else:
+                self.action_buttons[key].set_sensitive( False )
+
+    def build_table(self):
         # Create File Tree
         ##################
 
@@ -354,13 +411,28 @@ class GuiView(gtk.Table):
 
         # Allow Multiple Selections
         self.treeview.get_selection().set_mode( gtk.SELECTION_MULTIPLE )
+        self.treeview.get_selection().connect('changed', self.on_selection_changed )
 
         # Put table into scroll window to allow it to scroll
-        window = gtk.ScrolledWindow()
-        window.add_with_viewport(self.treeview)
+        self.add_with_viewport(self.treeview)
 
-        self.attach(hbbox,0,1,0,1)
-        self.attach(window,0,1,1,10)
+    def clear_files(self, deleteFile = True):
+        model = self.treeview.get_model()
+        iter = model.get_iter_root()
+        while iter:
+            key = model.get_value(iter, 0)
+
+            # Remove file from UI
+            self.guiHandler._remFileFromUIList(key)
+
+            # UnRegister File with activity share list
+            self.activity._unregisterShareFile( key )
+
+            # Attempt to remove file from system
+            if deleteFile:
+                self.activity.delete_file( key )
+
+            iter = model.iter_next(iter)
 
     def update_progress(self, id, bytes ):
         model = self.treeview.get_model()
