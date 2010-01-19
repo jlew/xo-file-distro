@@ -44,11 +44,11 @@ class GuiHandler():
             # get object and build file
             jobject = chooser.get_selected_object()
 
-            self.show_throbber(True, _("Please Wait... Packaging File") )
+            self.show_throbber(True, _("Packaging Object") )
             try:
                 file_obj = self.activity.build_file( jobject )
             except InShareException:
-                self._alert(_("File Not Added"), _("File already shared"))
+                self._alert(_("Object Not Added"), _("Object already shared"))
                 self.show_throbber( False )
                 return
 
@@ -63,12 +63,12 @@ class GuiHandler():
 
             # Upload to server?
             if data and data.has_key('upload'):
-                self.show_throbber(True, _("Please Wait... Uploading file to server"))
+                self.show_throbber(True, _("Uploading Object to server"))
                 def send():
                     try:
                         self.activity.send_file_to_server( file_obj.id, file_obj )
                     except FileUploadFailure:
-                        self._alert( _("Failed to upload file") )
+                        self._alert( _("Failed to upload object") )
                         self._remFileFromUIList( file_obj.id )
                         self.activity.delete_file( file_obj.id )
                     self.show_throbber( False )
@@ -120,7 +120,7 @@ class GuiHandler():
                         except ServerRequestFailure:
                             self._alert( _("Failed to send remove request to server") )
                         self.show_throbber( False )
-                    self.show_throbber(True, _("Please Wait... Sending request to server"))
+                    self.show_throbber(True, _("Sending request to server"))
                     threading.Thread(target=call).start()
 
     def requestDownloadFile(self, widget, data=None):
@@ -140,10 +140,10 @@ class GuiHandler():
                             except NoFreeTubes:
                                 self._alert(_("All tubes are busy, file download cannot start"),_("Please wait and try again"))
                     else:
-                        self._alert(_("File has already or is currently being downloaded"))
+                        self._alert(_("Object has already or is currently being downloaded"))
                 threading.Thread(target=do_down).start()
         else:
-            self._alert(_("You must select a file to download"))
+            self._alert(_("You must select an object to download"))
 
 
     def _addFileToUIList(self, fileid, fileinfo):
@@ -385,10 +385,10 @@ class GuiView(gtk.ScrolledWindow):
 
         #       Name            Cell_data_Func      Expand  Cell Renderer
         text_cells = [
-            [ _('File Name'),   FileInfo.file_name, False,  gtk.CellRendererText()],
+            [ _('Name'),   FileInfo.file_name, False,  gtk.CellRendererText()],
             [ _('Description'), FileInfo.file_desc, True,   gtk.CellRendererText()],
             [ _('Tags'),        FileInfo.file_tags, False,  gtk.CellRendererText()],
-            [ _('File Size'),   FileInfo.file_size, False,  gtk.CellRendererText()],
+            [ _('Size'),   FileInfo.file_size, False,  gtk.CellRendererText()],
             [ '',               FileInfo.load_bar,  False,  gtk.CellRendererProgress()]
         ]
 

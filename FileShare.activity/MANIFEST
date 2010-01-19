@@ -12,6 +12,11 @@ po/POTFILES.in
 activity/activity-fileshare.svg
 activity/activity.info
 MyExceptions.py
+icons/fs_gtk-remove.svg
+icons/gaim-link.svg
+icons/gtk-network.svg
+icons/fs_gtk-add.svg
+icons/epiphany-download.svg
 lib/simplejson/encoder.py
 lib/simplejson/tool.py
 lib/simplejson/decoder.py

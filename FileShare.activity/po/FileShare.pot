@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2010-01-12 22:33+0000\n"
+"POT-Creation-Date: 2010-01-19 18:31+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -20,128 +20,128 @@ msgstr ""
 msgid "FileShare"
 msgstr ""
 
-#: GuiView.py:45
-msgid "Please Wait... Packaging File"
+#: GuiView.py:47
+msgid "Packaging Object"
 msgstr ""
 
-#: GuiView.py:49
-msgid "File Not Added"
+#: GuiView.py:51
+msgid "Object Not Added"
 msgstr ""
 
-#: GuiView.py:49
-msgid "File already shared"
+#: GuiView.py:51
+msgid "Object already shared"
 msgstr ""
 
-#: GuiView.py:64
-msgid "Please Wait... Uploading file to server"
+#: GuiView.py:66
+msgid "Uploading Object to server"
 msgstr ""
 
-#: GuiView.py:69
-msgid "Failed to upload file"
+#: GuiView.py:71
+msgid "Failed to upload object"
 msgstr ""
 
-#: GuiView.py:90
+#: GuiView.py:92
 msgid "Installed bundle to Jorunal"
 msgstr ""
 
-#: GuiView.py:119
+#: GuiView.py:121
 msgid "Failed to send remove request to server"
 msgstr ""
 
-#: GuiView.py:121
-msgid "Please Wait... Sending request to server"
-msgstr ""
-
-#: GuiView.py:139
-msgid "All tubes are busy, file download cannot start"
-msgstr ""
-
-#: GuiView.py:139
-msgid "Please wait and try again"
+#: GuiView.py:123
+msgid "Sending request to server"
 msgstr ""
 
 #: GuiView.py:141
-msgid "File has already or is currently being downloaded"
+msgid "All tubes are busy, file download cannot start"
 msgstr ""
 
-#: GuiView.py:144
-msgid "You must select a file to download"
+#: GuiView.py:141
+msgid "Please wait and try again"
 msgstr ""
 
-#: GuiView.py:200
+#: GuiView.py:143
+msgid "Object has already or is currently being downloaded"
+msgstr ""
+
+#: GuiView.py:146
+msgid "You must select an object to download"
+msgstr ""
+
+#: GuiView.py:211
 msgid "Failed to get user list from server"
 msgstr ""
 
-#: GuiView.py:203
+#: GuiView.py:215
 msgid "Download Only"
 msgstr ""
 
-#: GuiView.py:203
+#: GuiView.py:215
 msgid "Upload/Remove"
 msgstr ""
 
-#: GuiView.py:203
+#: GuiView.py:215
 msgid "Admin"
 msgstr ""
 
-#: GuiView.py:207
+#: GuiView.py:219
 msgid "Return to Main Screen"
 msgstr ""
 
-#: GuiView.py:242
-msgid "Please Wait... Requesting user list from server"
+#: GuiView.py:256
+msgid "Requesting user list from server"
 msgstr ""
 
-#: GuiView.py:255
+#: GuiView.py:269
 msgid "User Change Failed"
 msgstr ""
 
-#: GuiView.py:283
-msgid "Add File"
+#: GuiView.py:302
+msgid "Add Object"
 msgstr ""
 
-#: GuiView.py:287
-msgid "Copy to Journal"
+#: GuiView.py:305
+msgid "Remove Object(s)"
 msgstr ""
 
-#: GuiView.py:291
-msgid "Remove Selected File"
+#: GuiView.py:308
+msgid "Copy Object(s) to Journal"
 msgstr ""
 
-#: GuiView.py:297
-msgid "Upload A File"
+#: GuiView.py:312
+msgid "Download Object(s)"
 msgstr ""
 
-#: GuiView.py:301
-msgid "Remove From Server"
-msgstr ""
-
-#: GuiView.py:306
-msgid "Server Settings"
-msgstr ""
-
-#: GuiView.py:310
-msgid "Download File"
+#: GuiView.py:315
+msgid "Server Permissions"
 msgstr ""
 
 #: GuiView.py:318
-msgid "File Name"
+msgid "Connect to Server"
 msgstr ""
 
-#: GuiView.py:319
+#: GuiView.py:363
+msgid "Actions"
+msgstr ""
+
+#: GuiView.py:388
+msgid "Name"
+msgstr ""
+
+#: GuiView.py:389
 msgid "Description"
 msgstr ""
 
-#: GuiView.py:320
+#: GuiView.py:390
 msgid "Tags"
 msgstr ""
 
-#: GuiView.py:321
-msgid "File Size"
+#: GuiView.py:391
+msgid "Size"
 msgstr ""
 
 #: FileInfo.py:32
-msgid "File Shared"
+msgid "Shared"
 msgstr ""
 
 #: FileInfo.py:36
@@ -168,47 +168,31 @@ msgstr ""
 msgid "Download Failed"
 msgstr ""
 
-#: FileShareActivity.py:137
-msgid "Please Wait... Searching for Server"
+#: FileShareActivity.py:187 FileShareActivity.py:189
+msgid "Error getting file list"
 msgstr ""
 
-#: FileShareActivity.py:164
-msgid "Please Wait... Requesting file list from server"
+#: FileShareActivity.py:192
+msgid "Requesting file list from server"
 msgstr ""
 
-#: FileShareActivity.py:271
+#: FileShareActivity.py:284
 msgid "Untitled"
 msgstr ""
 
-#: FileShareActivity.py:349
-msgid "Please Select Share Mode"
-msgstr ""
-
-#: FileShareActivity.py:350
-msgid "Share with others"
-msgstr ""
-
-#: FileShareActivity.py:350
-msgid "Connect to Server"
-msgstr ""
-
-#: FileShareActivity.py:352
-msgid "Share with others or connect to server?"
-msgstr ""
-
-#: FileShareActivity.py:531
+#: FileShareActivity.py:529
 msgid "File Downloaded"
 msgstr ""
 
-#: FileShareActivity.py:534
+#: FileShareActivity.py:532
 msgid "File Download Failed"
 msgstr ""
 
-#: FileShareActivity.py:547
+#: FileShareActivity.py:545
 msgid "Error getting document"
 msgstr ""
 
-#: FileShareActivity.py:579
+#: FileShareActivity.py:577
 msgid ""
 "Saving files in activity allows the activity to resume with the current file "
 "list but takes up more space."
