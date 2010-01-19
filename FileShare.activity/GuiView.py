@@ -375,43 +375,28 @@ class GuiView(gtk.ScrolledWindow):
         # Create File Tree
         ##################
 
-        # create the TreeViewColumn to display the data
-        colName = gtk.TreeViewColumn(_('File Name'))
-        colDesc = gtk.TreeViewColumn(_('Description'))
-        colTags = gtk.TreeViewColumn(_('Tags'))
-        colSize = gtk.TreeViewColumn(_('File Size'))
-        colProg = gtk.TreeViewColumn('')
+        #       Name            Cell_data_Func      Expand  Cell Renderer
+        text_cells = [
+            [ _('File Name'),   FileInfo.file_name, False,  gtk.CellRendererText()],
+            [ _('Description'), FileInfo.file_desc, True,   gtk.CellRendererText()],
+            [ _('Tags'),        FileInfo.file_tags, False,  gtk.CellRendererText()],
+            [ _('File Size'),   FileInfo.file_size, False,  gtk.CellRendererText()],
+            [ '',               FileInfo.load_bar,  False,  gtk.CellRendererProgress()]
+        ]
 
-        self.treeview.append_column(colName)
-        self.treeview.append_column(colDesc)
-        self.treeview.append_column(colTags)
-        self.treeview.append_column(colSize)
-        self.treeview.append_column(colProg)
+        for col_data in text_cells:
+            cell = col_data[3]
+            colName = gtk.TreeViewColumn(col_data[0], cell)
+            colName.set_cell_data_func(cell, col_data[1])
 
-        # create a CellRendererText to render the data
-        cell = gtk.CellRendererText()
-        pbar = gtk.CellRendererProgress()
+            # Should the col expand
+            colName.set_expand(col_data[2])
 
-        # add the cell to the tvcolumn and allow it to expand
-        colName.pack_start(cell, True)
-        colDesc.pack_start(cell, True)
-        colTags.pack_start(cell, True)
-        colSize.pack_start(cell, True)
-        colProg.pack_start(pbar, True)
+            # Add to tree
+            self.treeview.append_column(colName)
 
-        # set the cell "text" attribute- retrieve text
-        # from that column in treestore
-        colName.set_cell_data_func(cell, FileInfo.file_name)
-        colDesc.set_cell_data_func(cell, FileInfo.file_desc)
-        colTags.set_cell_data_func(cell, FileInfo.file_tags)
-        colSize.set_cell_data_func(cell, FileInfo.file_size)
-        colProg.set_cell_data_func(pbar, FileInfo.load_bar)
-
-        # make it searchable
+        # make it searchable by name
         self.treeview.set_search_column(1)
-
-        # Allow sorting on the column
-        colName.set_sort_column_id(1)
 
         # Allow Multiple Selections
         self.treeview.get_selection().set_mode( gtk.SELECTION_MULTIPLE )

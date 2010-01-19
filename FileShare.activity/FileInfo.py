@@ -29,7 +29,7 @@ class FileInfo(object):
         if have_file:
             self.aquired = size
             self.percent = 100
-            self.status = _("File Shared")
+            self.status = _("Shared")
         else:
             self.aquired = 0
             self.percent = 0
