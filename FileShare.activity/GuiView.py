@@ -243,6 +243,7 @@ class GuiHandler():
                     listbox.pack_start(holder, False, False, 0)
 
                 window = gtk.ScrolledWindow()
+                window.set_policy( gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC )
                 window.add_with_viewport(listbox)
 
                 myTable.attach(hbbox,0,1,0,1)
