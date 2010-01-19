@@ -41,7 +41,7 @@ import FileInfo
 from hashlib import sha1
 
 import urllib, urllib2, MultipartPostHandler, httplib
-import threading, signal
+import threading
 
 import logging
 _logger = logging.getLogger('fileshare-activity')
@@ -96,15 +96,30 @@ class FileShareActivity(Activity):
         # Set to true when closing for keep cleanup
         self._close_requested = False
 
-        # If they are the server, ask them if they want to be the server and use
-        # P2P share system or if they want to do a client/server with an
-        # external server
-
+        # Set up internals for server mode if later requested
         self._mode = "P2P"
         prof = profile.get_profile()
         self._user_key_hash = sha1(prof.pubkey).hexdigest()
         self._user_nick = profile.get_nick_name()
         self._user_permissions = 0
+        self.server_ip = None
+
+        jabber_serv = None
+        prof = profile.get_profile()
+        #Need to check if on 82 or higher
+        if hasattr(prof, 'jabber_server'):
+            jabber_serv = prof.jabber_server
+        else:
+            #Higher, everything was moved to gconf
+            import gconf
+            client = gconf.client_get_default()
+            jabber_serv = client.get_string("/desktop/sugar/collaboration/jabber_server")
+
+        if jabber_serv:
+            self.server_ip = jabber_serv
+            self.server_port= 14623
+            self.s_version = 0
+
 
         # INITIALIZE GUI
         ################
@@ -127,87 +142,62 @@ class FileShareActivity(Activity):
         self.show_all()
 
     def switch_to_server(self):
-        jabber_serv = None
-        prof = profile.get_profile()
-        #Need to check if on 82 or higher
-        if hasattr(prof, 'jabber_server'):
-            jabber_serv = prof.jabber_server
-        else:
-            #Higher, everything was moved to gconf
-            import gconf
-            client = gconf.client_get_default()
-            jabber_serv = client.get_string("/desktop/sugar/collaboration/jabber_server")
+        if self.server_ip and self.isServer:
+            self._mode = "SERVER"
+            self.isServer = False
 
-        if jabber_serv:
-            self.server_ip = jabber_serv
-            self.server_port= 14623
-            self.s_version = 0
+            # Remove shared mode
+            # Disable handlers incase not shared yet
+            self.disconnect( self._sh_hnd )
+            self.disconnect( self._jo_hnd )
 
-            self.disp.guiHandler.show_throbber(True, _("Please Wait... Searching for Server"))
-            if self.isServer and self.check_for_server():
-                self._mode = "SERVER"
-                self.isServer = False
+            # Disable notify the tube of changes
+            self.initiating = False
 
-                # Remove shared mode
-                # Disable handlers incase not shared yet
-                self.disconnect( self._sh_hnd )
-                self.disconnect( self._jo_hnd )
+            # Disable greeting people joining tube
+            if self.controlTube:
+                self.controlTube.switch_to_server_mode()
 
-                # Disable notify the tube of changes
-                self.initiating = False
+            # Set activity to private mode if shared
+            if self._shared_activity:
+                ##TODO:
+                pass
 
-                # Disable greeting people joining tube
-                if self.controlTube:
-                    self.controlTube.switch_to_server_mode()
+            # Clear file List (can't go to server mode after sharing, clear list)
+            # Will not delete files so connected people can still download files.
+            self.disp.clear_files(False)
 
-                # Set activity to private mode if shared
-                if self._shared_activity:
-                    ##TODO:
-                    pass
+            # Rebuild gui, now we are in server mode
+            self.disp.build_toolbars()
 
-                # Clear file List (can't go to server mode after sharing, clear list)
-                # Will not delete files so connected people can still download files.
-                self.disp.clear_files(False)
+            #self.set_canvas(self.disp)
+            #self.show_all()
 
-                # Rebuild gui, now we are in server mode
-                self.disp.build_toolbars()
+            #IN SERVER MODE, GET SERVER FILE LIST
+            def call():
+                try:
+                    conn = httplib.HTTPConnection( self.server_ip, self.server_port)
+                    conn.request("GET", "/filelist")
+                    r1 = conn.getresponse()
+                    if r1.status == 200:
+                        data = r1.read()
+                        conn.close()
+                        self.incomingRequest('filelist',data)
+                    else:
+                        self.disp.guiHandler._alert(str(r1.status), _("Error getting file list") )
+                except:
+                    self.disp.guiHandler._alert(_("Error getting file list"))
+                self.disp.guiHandler.show_throbber(False)
 
-                #self.set_canvas(self.disp)
-                #self.show_all()
-
-                #IN SERVER MODE, GET SERVER FILE LIST
-                def call():
-                    try:
-                        conn = httplib.HTTPConnection( self.server_ip, self.server_port)
-                        conn.request("GET", "/filelist")
-                        r1 = conn.getresponse()
-                        if r1.status == 200:
-                            data = r1.read()
-                            conn.close()
-                            self.incomingRequest('filelist',data)
-                        else:
-                            self.disp.guiHandler._alert(str(r1.status), _("Error getting file list") )
-                    except:
-                        self.disp.guiHandler._alert(_("Error getting file list"))
-                    self.disp.guiHandler.show_throbber(False)
-
-                self.disp.guiHandler.show_throbber(True, _("Requesting file list from server"))
-                threading.Thread(target=call).start()
+            self.disp.guiHandler.show_throbber(True, _("Requesting file list from server"))
+            threading.Thread(target=call).start()
 
     def check_for_server(self):
-
-        def raise_timeout(signum, frame):
-            raise TimeOut("Timeout!")
-
-        signal.signal(signal.SIGALRM, raise_timeout)
-
         s_version = None
         try:
-            signal.alarm(10) # raise alarm in 10 seconds
             conn = httplib.HTTPConnection( self.server_ip, self.server_port)
             conn.request("GET", "/version")
             r1 = conn.getresponse()
-            signal.alarm(0)
             if r1.status == 200:
                 s_version= r1.read()
                 conn.close()
@@ -230,13 +220,10 @@ class FileShareActivity(Activity):
                     # Older version didn't have permissions, set 1 as default (upload/remove)
                     self._user_permissions = 1
                 self.s_version = s_version
-                signal.alarm(0) # disable alarm
                 return True
             else:
-                signal.alarm(0) # disable alarm
                 return False
         except:
-            signal.alarm(0) # disable alarm
             return False
 
     def get_server_user_list(self):

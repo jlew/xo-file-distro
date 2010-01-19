@@ -293,7 +293,7 @@ class GuiView(gtk.ScrolledWindow):
         self.guiHandler = GuiHandler( activity, self.treeview, self )
         #self.build_table(activity)
 
-    def build_toolbars(self, custom = True):
+    def build_toolbars(self):
         self.action_buttons = {}
 
         # BUILD CUSTOM TOOLBAR
@@ -316,7 +316,7 @@ class GuiView(gtk.ScrolledWindow):
 
         self.action_buttons['server'] = ToolButton('gaim-link')
         self.action_buttons['server'].set_tooltip( _('Connect to Server') )
-
+        self.action_buttons['server'].set_sensitive( False )
 
         if self.activity.isServer:
             self.action_buttons['add'].connect("clicked", self.guiHandler.requestAddFile, None)
@@ -328,6 +328,15 @@ class GuiView(gtk.ScrolledWindow):
             self.action_bar.insert(self.action_buttons['save'], -1)
             self.action_bar.insert(self.action_buttons['rem'], -1)
             self.action_bar.insert(self.action_buttons['server'], -1)
+
+            # Check for server, if found activate connect link
+            def check_server_status():
+                try:
+                    if self.activity.check_for_server():
+                        self.action_buttons['server'].set_sensitive( True )
+                except ServerRequestFailure:
+                    pass
+            threading.Thread(target=check_server_status).start()
 
         else:
             self.action_buttons['down'].connect("clicked", self.guiHandler.requestDownloadFile, None)
@@ -349,13 +358,12 @@ class GuiView(gtk.ScrolledWindow):
         self.toolbar_set_selection( False )
 
         # Create Toolbox
-        toolbox = ActivityToolbox(self.activity)
+        self.toolbox = ActivityToolbox(self.activity)
 
-        if custom:
-            toolbox.add_toolbar(_("Actions"), self.action_bar)
+        self.toolbox.add_toolbar(_("Actions"), self.action_bar)
 
-        self.activity.set_toolbox(toolbox)
-        toolbox.show()
+        self.activity.set_toolbox(self.toolbox)
+        self.toolbox.show()
 
     def on_selection_changed(self, selection):
         if selection.count_selected_rows() == 0:
