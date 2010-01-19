@@ -30,10 +30,11 @@ import logging
 _logger = logging.getLogger('fileshare-activity')
 
 class GuiHandler():
-    def __init__(self, activity, tree):
+    def __init__(self, activity, tree, handle):
         self.activity = activity
         self.treeview = tree
         self.tb_alert = None
+        self.guiView = handle
 
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
@@ -247,7 +248,7 @@ class GuiHandler():
                 myTable.attach(hbbox,0,1,0,1)
                 myTable.attach(window,0,1,1,10)
 
-                #self.activity.disp.build_toolbars( False )
+                self.lockout_action_menu(True)
                 self.activity.set_canvas(myTable)
                 self.activity.show_all()
 
@@ -272,10 +273,12 @@ class GuiHandler():
         threading.Thread(target=change).start()
 
     def restore_view(self, widget, data = None):
-        #self.....build_toolbars()
+        self.lockout_action_menu(False)
         self.activity.set_canvas(self.activity.disp)
         #self.show_throbber( False )
 
+    def lockout_action_menu(self, set_lock = True):
+        self.guiView.action_bar.set_sensitive(not set_lock)
 
 class GuiView(gtk.ScrolledWindow):
     """
@@ -286,14 +289,14 @@ class GuiView(gtk.ScrolledWindow):
         self.set_policy( gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC )
         self.activity = activity
         self.treeview = gtk.TreeView(gtk.TreeStore(str,object))
-        self.guiHandler = GuiHandler( activity, self.treeview )
+        self.guiHandler = GuiHandler( activity, self.treeview, self )
         #self.build_table(activity)
 
     def build_toolbars(self, custom = True):
         self.action_buttons = {}
 
         # BUILD CUSTOM TOOLBAR
-        action_bar = gtk.Toolbar()
+        self.action_bar = gtk.Toolbar()
         self.action_buttons['add'] = ToolButton('fs_gtk-add')
         self.action_buttons['add'].set_tooltip(_("Add Object"))
 
@@ -320,27 +323,27 @@ class GuiView(gtk.ScrolledWindow):
             self.action_buttons['rem'].connect("clicked", self.guiHandler.requestRemFile, None)
             self.action_buttons['server'].connect("clicked", self.guiHandler.switch_to_server, None)
 
-            action_bar.insert(self.action_buttons['add'], -1)
-            action_bar.insert(self.action_buttons['save'], -1)
-            action_bar.insert(self.action_buttons['rem'], -1)
-            action_bar.insert(self.action_buttons['server'], -1)
+            self.action_bar.insert(self.action_buttons['add'], -1)
+            self.action_bar.insert(self.action_buttons['save'], -1)
+            self.action_bar.insert(self.action_buttons['rem'], -1)
+            self.action_bar.insert(self.action_buttons['server'], -1)
 
         else:
             self.action_buttons['down'].connect("clicked", self.guiHandler.requestDownloadFile, None)
-            action_bar.insert(self.action_buttons['down'], -1)
+            self.action_bar.insert(self.action_buttons['down'], -1)
 
             if self.activity._mode == 'SERVER' and self.activity._user_permissions != 0:
                 self.action_buttons['add'].connect("clicked", self.guiHandler.requestAddFile, {'upload':True})
                 self.action_buttons['rem'].connect("clicked", self.guiHandler.requestRemFile, {'remove':True})
 
-                action_bar.insert(self.action_buttons['add'], -1)
-                action_bar.insert(self.action_buttons['rem'], -1)
+                self.action_bar.insert(self.action_buttons['add'], -1)
+                self.action_bar.insert(self.action_buttons['rem'], -1)
 
                 if self.activity._user_permissions == 2:
                     self.action_buttons['admin'].connect("clicked", self.guiHandler.showAdmin, None)
-                    action_bar.insert(self.action_buttons['admin'], -1)
+                    self.action_bar.insert(self.action_buttons['admin'], -1)
 
-        action_bar.show_all()
+        self.action_bar.show_all()
 
         self.toolbar_set_selection( False )
 
@@ -348,7 +351,7 @@ class GuiView(gtk.ScrolledWindow):
         toolbox = ActivityToolbox(self.activity)
 
         if custom:
-            toolbox.add_toolbar(_("Actions"), action_bar)
+            toolbox.add_toolbar(_("Actions"), self.action_bar)
 
         self.activity.set_toolbox(toolbox)
         toolbox.show()
