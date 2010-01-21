@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd" [
+<!ENTITY stroke_color "#010101">
+<!ENTITY fill_color "#FFFFFF">
+]><svg version="1.1" id="fileshare-icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+	 x="0px" y="0px" width="50px" height="50px" viewBox="0 0 50 50" enable-background="new 0 0 50 50" xml:space="preserve">
+<g display="block" id="fileshare-icon">
+<path fill="&fill_color;" stroke="&stroke_color;" stroke-width="2" d="M48.848,36.24c0,6.904-5.598,12.5-12.5,12.5
+	c-6.901,0-12.5-5.596-12.5-12.5s5.598-12.5,12.5-12.5C43.25,23.74,48.848,29.336,48.848,36.24z"/>
+<path fill="&fill_color;" stroke="&stroke_color;" stroke-width="2" d="M26.293,14.052c0,6.904-5.598,12.5-12.5,12.5
+	c-6.901,0-12.5-5.596-12.5-12.5s5.598-12.5,12.5-12.5C20.695,1.552,26.293,7.148,26.293,14.052z"/>
+<g display="inline">
+<ellipse fill="&fill_color;" stroke="&stroke_color;" stroke-width="1.5" cx="36.391" cy="36.238" rx="7.5" ry="12.501"/>
+<line fill="none" stroke="&stroke_color;" stroke-width="1.5" x1="36.348" y1="23.74" x2="36.348" y2="48.74"/>
+<line fill="none" stroke="&stroke_color;" stroke-width="1.5" x1="23.848" y1="36.24" x2="48.848" y2="36.24"/>
+<ellipse fill="&fill_color;" stroke="&stroke_color;" stroke-width="1.5" cx="13.836" cy="14.05" rx="7.5" ry="12.5"/>
+<line fill="none" stroke="&stroke_color;" stroke-width="1.5" x1="13.793" y1="1.552" x2="13.793" y2="26.553"/>
+<line fill="none" stroke="&stroke_color;" stroke-width="1.5" x1="1.293" y1="14.052" x2="26.293" y2="14.052"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M18.654,31.911c-3.113,3.114-3.053,8.212,0.135,11.399"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M12.187,33.072c-2.479,2.48-2.431,6.539,0.107,9.077"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M5.881,33.83c-2.065,2.065-2.025,5.447,0.089,7.561"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M31.461,17.909c2.947-2.949,2.891-7.775-0.128-10.793"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M37.903,16.809c2.348-2.348,2.302-6.191-0.102-8.594"/>
+<path fill="none" stroke="&stroke_color;" stroke-width="3" d="M44.193,16.092c1.955-1.956,1.917-5.158-0.085-7.159"/>
+</g>
+</g></svg>
