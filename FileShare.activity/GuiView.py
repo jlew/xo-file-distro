@@ -364,6 +364,7 @@ class GuiView(gtk.ScrolledWindow):
 
         self.activity.set_toolbox(self.toolbox)
         self.toolbox.show()
+        self.toolbox.set_current_toolbar(1)
 
     def on_selection_changed(self, selection):
         if selection.count_selected_rows() == 0:
