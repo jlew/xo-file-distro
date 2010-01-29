@@ -9,7 +9,6 @@ FileShareActivity.py
 MultipartPostHandler.py
 po/FileShare.pot
 po/POTFILES.in
-activity/activity-fileshare.svg
 activity/activity.info
 MyExceptions.py
 icons/fs_gtk-remove.svg
@@ -23,3 +22,4 @@ lib/simplejson/decoder.py
 lib/simplejson/__init__.py
 lib/simplejson/_speedups.c
 lib/simplejson/scanner.py
+activity/fileshare-icon.svg
