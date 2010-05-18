@@ -39,7 +39,7 @@ class GuiHandler():
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
 
-        chooser = ObjectChooser()
+        chooser = ObjectChooser(parent=self.activity)
         if chooser.run() == gtk.RESPONSE_ACCEPT:
             # get object and build file
             jobject = chooser.get_selected_object()
