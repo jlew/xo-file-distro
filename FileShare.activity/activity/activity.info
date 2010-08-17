@@ -4,5 +4,5 @@ service_name = org.laptop.sugar.FileShareActivity
 activity_version = 10
 host_version = 1
 icon = fileshare-icon
-class = FileShareActivity.FileShareActivity
+exec = sugar-activity FileShareActivity.FileShareActivity
 show_launcher = yes
