@@ -181,8 +181,8 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write( data )
 
-            except IOError:
-                self.send_error(500,'Server Error')
+            except IOError, err:
+                self.send_error(500,'Server IO Error: %s' % str(err))
                 self.end_headers()
         else:
             self.send_error(404,'File Not Found: %s' % self.path)
@@ -213,8 +213,12 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
                         # Begin the response
                         self.send_response(200)
                         self.end_headers()
-                    except:
-                        self.send_error(500,'Server Error or Invalid Request')
+
+                    except IOError, err:
+                        self.send_error(500,'Server IO Error: %s' % str(err))
+
+                    except Exception, err:
+                        self.send_error(500,'Server Error or Invalid Request: %s' % str(err))
                         self.end_headers()
                 return
             else:
