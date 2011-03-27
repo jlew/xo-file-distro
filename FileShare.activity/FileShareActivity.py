@@ -461,7 +461,7 @@ class FileShareActivity(Activity):
             self._new_tube_cb(*tube_info)
 
     def _list_tubes_error_cb(self, e):
-        _loggerg.error('ListTubes() failed: %s', e)
+        _logger.error('ListTubes() failed: %s', e)
 
     def _new_tube_cb(self, id, initiator, type, service, params, state):
         _logger.debug('New tube: ID=%d initator=%d type=%d service=%s '
