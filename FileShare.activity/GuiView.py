@@ -17,13 +17,14 @@
 import gtk
 import FileInfo
 import threading
+import os
 from gettext import gettext as _
 
 
 from sugar.activity.activity import ActivityToolbox
 from sugar.graphics.toolbutton import ToolButton
 from sugar.graphics.objectchooser import ObjectChooser
-from sugar.graphics.alert import NotifyAlert, Alert
+from sugar.graphics.alert import NotifyAlert
 
 from MyExceptions import InShareException, FileUploadFailure, ServerRequestFailure, NoFreeTubes
 import logging
@@ -39,7 +40,7 @@ class GuiHandler():
     def requestAddFile(self, widget, data=None):
         _logger.info('Requesting to add file')
 
-        chooser = ObjectChooser()
+        chooser = ObjectChooser(parent=self.activity)
         if chooser.run() == gtk.RESPONSE_ACCEPT:
             # get object and build file
             jobject = chooser.get_selected_object()
