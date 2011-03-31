@@ -182,8 +182,13 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.wfile.write( data )
 
             except IOError, err:
-                self.send_error(500,'Server IO Error: %s' % str(err))
-                self.end_headers()
+                print "Server IO Error:", str(err)
+
+                try:
+                    self.send_error(500,'Server IO Error')
+                    self.end_headers()
+                except:
+                    pass
         else:
             self.send_error(404,'File Not Found: %s' % self.path)
             self.end_headers()
@@ -215,11 +220,22 @@ class MyServer(BaseHTTPServer.BaseHTTPRequestHandler):
                         self.end_headers()
 
                     except IOError, err:
-                        self.send_error(500,'Server IO Error: %s' % str(err))
+                        print "Server IO Error:", str(err)
+
+                        try:
+                            self.send_error(500,'Server IO Error')
+                            self.end_headers()
+                        except:
+                            pass
 
                     except Exception, err:
-                        self.send_error(500,'Server Error or Invalid Request: %s' % str(err))
-                        self.end_headers()
+                        print "Server error:", str(err)
+
+                        try:
+                            self.send_error(500,'Server Error or Invalid Request')
+                            self.end_headers()
+                        except:
+                            pass
                 return
             else:
                 self.send_error(403, "Forbidden")
